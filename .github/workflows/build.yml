@@ -19,16 +19,19 @@ jobs:
         include:
           - platform: windows-latest
             artifact: jade-windows-x86_64
-            # binary produced by the jade-desktop crate
-            binary: jade-desktop.exe
+            # Friendly name for the downloadable installer artifact
+            installer_name: Jade-windows-x86_64-setup.exe
+            # Tauri NSIS output glob (versioned)
+            installer_glob: target/release/bundle/nsis/*-setup.exe
           # Uncomment when ready to ship Linux builds:
           # - platform: ubuntu-22.04
           #   artifact: jade-linux-x86_64
-          #   binary: jade-desktop
+          #   installer_name: Jade-linux-x86_64.AppImage
+          #   installer_glob: target/release/bundle/appimage/*.AppImage
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
@@ -42,14 +45,14 @@ jobs:
             xdg-utils
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install Rust toolchain
@@ -66,23 +69,26 @@ jobs:
       - name: Build Tauri app
         run: pnpm build
 
-      - name: Stage artifacts
+      - name: Stage downloadable installer
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist-artifacts
-          cp "target/release/${{ matrix.binary }}" dist-artifacts/
-          # Platform installers / bundles (nsis, msi, deb, AppImage, …)
-          if [ -d target/release/bundle ]; then
-            mkdir -p dist-artifacts/bundle
-            cp -R target/release/bundle/. dist-artifacts/bundle/
+          mkdir -p dist
+          shopt -s nullglob
+          files=(${{ matrix.installer_glob }})
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No installer matched: ${{ matrix.installer_glob }}" >&2
+            find target/release/bundle -type f 2>/dev/null || true
+            exit 1
           fi
-          ls -laR dist-artifacts
+          cp "${files[0]}" "dist/${{ matrix.installer_name }}"
+          ls -la dist/
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      # Direct (unzipped) upload so the Actions UI offers the .exe itself
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}
-          path: dist-artifacts/
+          path: dist/${{ matrix.installer_name }}
+          archive: false
           if-no-files-found: error
           retention-days: 30
