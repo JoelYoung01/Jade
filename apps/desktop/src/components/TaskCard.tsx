@@ -95,63 +95,65 @@ export function TaskCard({
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <article
-            ref={setNodeRef}
-            style={style}
-            className={cn(
-              "cursor-grab rounded-md border border-transparent bg-card/70 px-3 py-2.5 transition-colors hover:border-border active:cursor-grabbing",
-              isDragging && "shadow-lg ring-1 ring-primary/40",
-            )}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              onEdit(task);
-            }}
-            {...listeners}
-            {...attributes}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-sm font-medium leading-snug text-foreground">{task.title}</h3>
-              {task.repeat_cron ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      className="mt-0.5 shrink-0 text-muted-foreground"
-                      aria-label={repeatLabel ?? `Repeats: ${task.repeat_cron}`}
-                    >
-                      <Repeat className="size-3.5" aria-hidden />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {repeatLabel ?? task.repeat_cron}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
-            </div>
-            <p
+          <div data-flip-id={task.id} className="w-full shrink-0 will-change-transform">
+            <article
+              ref={setNodeRef}
+              style={style}
               className={cn(
-                "mt-1 flex items-center gap-1 text-xs",
-                overdue ? "font-medium text-red-400" : "text-muted-foreground",
+                "cursor-grab rounded-md border border-transparent bg-card/70 px-3 py-2.5 transition-colors hover:border-border active:cursor-grabbing",
+                isDragging && "shadow-lg ring-1 ring-primary/40",
               )}
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+                onEdit(task);
+              }}
+              {...listeners}
+              {...attributes}
             >
-              {overdue ? (
-                <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-              ) : null}
-              <span>{formatDue(task.due_at)}</span>
-              {overdue ? <span className="sr-only">Overdue</span> : null}
-            </p>
-            {task.tags.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {task.tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="rounded bg-secondary px-1.5 py-0.5 text-[10px] tracking-wide text-secondary-foreground uppercase"
-                  >
-                    {tag.name}
-                  </span>
-                ))}
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-medium leading-snug text-foreground">{task.title}</h3>
+                {task.repeat_cron ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className="mt-0.5 shrink-0 text-muted-foreground"
+                        aria-label={repeatLabel ?? `Repeats: ${task.repeat_cron}`}
+                      >
+                        <Repeat className="size-3.5" aria-hidden />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {repeatLabel ?? task.repeat_cron}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
               </div>
-            )}
-          </article>
+              <p
+                className={cn(
+                  "mt-1 flex items-center gap-1 text-xs",
+                  overdue ? "font-medium text-red-400" : "text-muted-foreground",
+                )}
+              >
+                {overdue ? (
+                  <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+                ) : null}
+                <span>{formatDue(task.due_at)}</span>
+                {overdue ? <span className="sr-only">Overdue</span> : null}
+              </p>
+              {task.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {task.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="rounded bg-secondary px-1.5 py-0.5 text-[10px] tracking-wide text-secondary-foreground uppercase"
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </article>
+          </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onSelect={() => onEdit(task)}>Edit…</ContextMenuItem>

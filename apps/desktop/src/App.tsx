@@ -157,19 +157,21 @@ export default function App(): React.JSX.Element {
 
   async function handleReschedule(id: string, mode: ReschedulePreset): Promise<void> {
     try {
-      await apiRescheduleTask(id, mode);
-      await refresh();
+      const updated = await apiRescheduleTask(id, mode);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      await refresh();
     }
   }
 
   async function handleRescheduleCustom(id: string, dueAt: string): Promise<void> {
     try {
-      await apiRescheduleTask(id, "custom", dueAt);
-      await refresh();
+      const updated = await apiRescheduleTask(id, "custom", dueAt);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      await refresh();
     }
   }
 
@@ -254,6 +256,7 @@ export default function App(): React.JSX.Element {
                 tasks={tasks}
                 tags={tags}
                 visible={visibility}
+                animateLayout={activeId === null}
                 onToggleLane={(status) => void handleToggleLane(status)}
                 onEdit={openEdit}
                 onUpdateStatus={(id, status) => void handleUpdateStatus(id, status)}

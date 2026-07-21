@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { TaskCard, type ReschedulePreset } from "@/components/TaskCard";
 import type { Tag, Task, TaskStatus } from "@/lib/types";
+import { useFlipLayout } from "@/lib/useFlipLayout";
 import { cn } from "@/lib/utils";
 
 const LANE_META: Record<TaskStatus, { title: string; hint: string }> = {
@@ -47,6 +48,7 @@ function Lane({
       </div>
       <div
         ref={setNodeRef}
+        data-lane-scroll
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg border border-dashed border-border/50 p-2 transition-colors",
           isOver && "border-primary/50 bg-primary/5",
@@ -76,6 +78,8 @@ type TaskBoardProps = {
   tasks: Task[];
   tags: Tag[];
   visible: Record<TaskStatus, boolean>;
+  /** When false, skip FLIP (e.g. while a card is being dragged). */
+  animateLayout?: boolean;
   onToggleLane: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
   onUpdateStatus: (id: string, status: TaskStatus) => void;
@@ -104,6 +108,7 @@ export function TaskBoard({
   tasks,
   tags,
   visible,
+  animateLayout = true,
   onToggleLane,
   onEdit,
   onUpdateStatus,
@@ -113,15 +118,41 @@ export function TaskBoard({
 }: TaskBoardProps): React.JSX.Element {
   const [textQuery, setTextQuery] = React.useState("");
   const [tagId, setTagId] = React.useState("");
+  const lanesRef = React.useRef<HTMLDivElement>(null);
 
   const filtered = tasks.filter((task) => matchesFilters(task, textQuery, tagId));
 
-  const byStatus = (status: TaskStatus) =>
-    filtered
-      .filter((t) => t.status === status)
-      .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
+  const tasksByLane = React.useMemo(() => {
+    const groups: Record<TaskStatus, Task[]> = {
+      inactive: [],
+      active: [],
+      complete: [],
+    };
+    for (const task of filtered) {
+      groups[task.status].push(task);
+    }
+    for (const status of ORDER) {
+      groups[status].sort(
+        (a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime(),
+      );
+    }
+    return groups;
+  }, [filtered]);
 
   const visibleLanes = ORDER.filter((s) => visible[s]);
+
+  const layoutKey = React.useMemo(() => {
+    const lanes = visibleLanes
+      .map((status) =>
+        tasksByLane[status]
+          .map((task) => `${task.id}:${task.status}:${task.due_at}`)
+          .join(","),
+      )
+      .join("|");
+    return `${lanes}#q:${textQuery}#tag:${tagId}`;
+  }, [tasksByLane, visibleLanes, textQuery, tagId]);
+
+  useFlipLayout(lanesRef, layoutKey, animateLayout);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 py-4">
@@ -173,12 +204,12 @@ export function TaskBoard({
       </div>
 
       {visibleLanes.length > 0 ? (
-        <div className="flex min-h-0 flex-1 gap-3">
+        <div ref={lanesRef} className="flex min-h-0 flex-1 gap-3">
           {visibleLanes.map((status) => (
             <Lane
               key={status}
               status={status}
-              tasks={byStatus(status)}
+              tasks={tasksByLane[status]}
               onEdit={onEdit}
               onUpdateStatus={onUpdateStatus}
               onReschedule={onReschedule}
