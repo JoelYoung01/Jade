@@ -1,0 +1,30 @@
+[package]
+name = "jade-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Jade command-line interface"
+publish = false
+
+[[bin]]
+name = "jade"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+jade-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+serde_json = { workspace = true }
+tempfile = "3"
+
+[lints]
+workspace = true
