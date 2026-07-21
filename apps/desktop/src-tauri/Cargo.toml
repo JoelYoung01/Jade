@@ -1,0 +1,37 @@
+[package]
+name = "jade-desktop"
+version = "0.1.0"
+description = "Jade desktop shell"
+authors = ["you"]
+edition.workspace = true
+license.workspace = true
+# Avoid colliding with jade-cli's `jade` binary in the workspace target dir.
+default-run = "jade-desktop"
+
+[lib]
+name = "jade_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "jade-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+jade-core = { workspace = true }
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[lints]
+workspace = true
