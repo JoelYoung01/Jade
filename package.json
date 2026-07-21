@@ -1,0 +1,32 @@
+{
+  "name": "jade",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @jade/desktop tauri:dev",
+    "ui": "pnpm --filter @jade/desktop dev",
+    "build": "pnpm --filter @jade/desktop tauri:build",
+    "typecheck": "pnpm --filter @jade/desktop typecheck",
+    "lint": "eslint apps/desktop/src --max-warnings 0",
+    "lint:fix": "eslint apps/desktop/src --fix",
+    "test": "pnpm --filter @jade/desktop test",
+    "test:rust": "cargo test --workspace",
+    "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && cargo deny check",
+    "check": "pnpm typecheck && pnpm lint && pnpm check:rust",
+    "fix": "pnpm lint:fix && cargo fmt --all",
+    "tauri": "pnpm --filter @jade/desktop tauri"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.50.0"
+  },
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22"
+  }
+}

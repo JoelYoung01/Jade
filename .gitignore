@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+**/dist/**
+!apps/desktop/dist/
+!apps/desktop/dist/index.html
+target/
+**/target/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+.idea/
+
+# Test / coverage
+coverage/
+*.tsbuildinfo
+
+# Tauri
+*.app
+*.dmg
+*.AppImage
+*.msi
+*.exe
+!apps/desktop/src-tauri/icons/**
