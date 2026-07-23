@@ -27,14 +27,29 @@ import {
   validateCron,
 } from "@/lib/repeat";
 import type { RepeatPreset, Tag, Task, TaskFormValues } from "@/lib/types";
-import { fromDatetimeLocalValue, nextHourRounded, toDatetimeLocalValue } from "@/lib/time";
-import { tagSuggestionPool } from "@/lib/tags";
+import {
+  applyDuePreset,
+  fromDatetimeLocalValue,
+  matchesDueQuickPreset,
+  nextHourRounded,
+  toDatetimeLocalValue,
+  type DueQuickPreset,
+} from "@/lib/time";
+import { TagLabel } from "@/components/TagLabel";
+import { bestTagAutocomplete, parseTagParts, tagSuggestionPool } from "@/lib/tags";
 import { cn } from "@/lib/utils";
 
 const selectClassName = cn(
   "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 );
+
+const DUE_QUICK_PRESETS: { mode: DueQuickPreset; label: string }[] = [
+  { mode: "today", label: "Today" },
+  { mode: "tomorrow", label: "Tomorrow" },
+  { mode: "next_monday", label: "Next Monday" },
+  { mode: "first_monday_next_month", label: "First Monday next month" },
+];
 
 const PRESET_OPTIONS: { value: RepeatPreset; label: string }[] = [
   { value: "never", label: "Never" },
@@ -78,9 +93,14 @@ function findTagByName(tags: Tag[], name: string): Tag | undefined {
   return tags.find((tag) => tag.name.toLowerCase() === needle);
 }
 
+const chipButtonClassName =
+  "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 type TagChipProps = {
   name: string;
   variant: "selected" | "suggestion";
+  highlighted?: boolean;
+  chipRef?: React.Ref<HTMLSpanElement>;
   onAdd?: () => void;
   onRemove?: () => void;
   onRequestDelete?: () => void;
@@ -89,30 +109,42 @@ type TagChipProps = {
 function TagChip({
   name,
   variant,
+  highlighted = false,
+  chipRef,
   onAdd,
   onRemove,
   onRequestDelete,
 }: TagChipProps): React.JSX.Element {
+  const keyed = parseTagParts(name).kind === "keyed";
   const chip = (
     <span
+      ref={chipRef}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs",
+        "inline-flex items-center gap-1 rounded-md text-xs transition-colors",
+        keyed ? "py-0 pl-0 pr-2" : "px-2 py-0.5",
         variant === "selected"
           ? "bg-accent text-accent-foreground"
-          : "border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          : highlighted
+            ? "border border-primary bg-accent text-accent-foreground ring-1 ring-ring"
+            : "border border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground",
       )}
     >
       {variant === "suggestion" ? (
-        <button type="button" onClick={onAdd}>
-          {name}
+        <button
+          type="button"
+          className={cn(chipButtonClassName, keyed && "min-w-0")}
+          onClick={onAdd}
+          aria-label={`Add tag ${name}`}
+        >
+          <TagLabel name={name} flushKey={keyed} className={keyed ? "rounded-md" : undefined} />
         </button>
       ) : (
         <>
-          {name}
+          <TagLabel name={name} flushKey={keyed} className={keyed ? "rounded-md" : undefined} />
           {onRemove && (
             <button
               type="button"
-              className="opacity-70 hover:opacity-100"
+              className={cn(chipButtonClassName, "opacity-70 hover:opacity-100")}
               onClick={onRemove}
               aria-label={`Remove ${name}`}
             >
@@ -143,6 +175,103 @@ function TagChip({
   );
 }
 
+type DueQuickPresetButtonsProps = {
+  dueDate: Date | null;
+  onSelect: (mode: DueQuickPreset) => void;
+};
+
+/** Exclusive quick-due chips with radiogroup keyboard behavior (no disable-on-select). */
+function DueQuickPresetButtons({
+  dueDate,
+  onSelect,
+}: DueQuickPresetButtonsProps): React.JSX.Element {
+  const buttonRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = DUE_QUICK_PRESETS.findIndex(
+    (preset) => dueDate != null && matchesDueQuickPreset(dueDate, preset.mode),
+  );
+  const [focusIndex, setFocusIndex] = React.useState(() =>
+    selectedIndex >= 0 ? selectedIndex : 0,
+  );
+
+  React.useEffect(() => {
+    if (selectedIndex >= 0) setFocusIndex(selectedIndex);
+  }, [selectedIndex]);
+
+  function moveFocus(nextIndex: number): void {
+    setFocusIndex(nextIndex);
+    buttonRefs.current[nextIndex]?.focus();
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number): void {
+    const last = DUE_QUICK_PRESETS.length - 1;
+    let next: number | null = null;
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        next = index === last ? 0 : index + 1;
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        next = index === 0 ? last : index - 1;
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = last;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    moveFocus(next);
+  }
+
+  function selectPreset(mode: DueQuickPreset, index: number): void {
+    onSelect(mode);
+    setFocusIndex(index);
+    // Keep focus on the chip after selection (do not disable selected chips).
+    requestAnimationFrame(() => buttonRefs.current[index]?.focus());
+  }
+
+  return (
+    <div role="radiogroup" aria-label="Quick due date" className="flex flex-wrap gap-1.5">
+      {DUE_QUICK_PRESETS.map((preset, index) => {
+        const selected =
+          dueDate != null && matchesDueQuickPreset(dueDate, preset.mode);
+        return (
+          <Button
+            key={preset.mode}
+            ref={(node) => {
+              buttonRefs.current[index] = node;
+            }}
+            type="button"
+            role="radio"
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-7 px-2 text-[11px] font-normal",
+              selected
+                ? "border-primary bg-accent text-accent-foreground"
+                : "text-muted-foreground",
+            )}
+            aria-checked={selected}
+            tabIndex={focusIndex === index ? 0 : -1}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+            onClick={() => selectPreset(preset.mode, index)}
+            onFocus={() => setFocusIndex(index)}
+          >
+            {preset.label}
+            {selected ? (
+              <span aria-hidden="true"> ✓</span>
+            ) : null}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 function TaskForm({
   task,
   existingTags,
@@ -154,7 +283,12 @@ function TaskForm({
 }: TaskFormProps): React.JSX.Element {
   const isEdit = task != null;
   const titleRef = React.useRef<HTMLInputElement>(null);
+  const dueRef = React.useRef<HTMLInputElement>(null);
+  const repeatRef = React.useRef<HTMLSelectElement>(null);
   const confirmDeleteRef = React.useRef<HTMLButtonElement>(null);
+  const suggestionChipEls = React.useRef(new Map<string, HTMLSpanElement>());
+  const selectedChipEls = React.useRef(new Map<string, HTMLSpanElement>());
+  const pendingFlipFrom = React.useRef<DOMRect | null>(null);
   const [title, setTitle] = React.useState(task?.title ?? "");
   const [description, setDescription] = React.useState(task?.description ?? "");
   const [dueLocal, setDueLocal] = React.useState(() =>
@@ -191,6 +325,20 @@ function TaskForm({
     }
   }
 
+  function applyDueQuickPreset(mode: DueQuickPreset): void {
+    let current: Date;
+    try {
+      current = fromDatetimeLocalValue(dueLocal);
+    } catch {
+      current = nextHourRounded();
+    }
+    handleDueChange(
+      toDatetimeLocalValue(
+        applyDuePreset(current, mode, new Date(), { defaultAfternoonIfNotToday: true }),
+      ),
+    );
+  }
+
   function handlePresetChange(preset: RepeatPreset): void {
     setRepeatPreset(preset);
     if (preset === "never") {
@@ -214,10 +362,41 @@ function TaskForm({
 
   const pool = tagSuggestionPool(recentTagNames, existingTags);
   const draft = tagDraft.trim().toLowerCase();
-  const suggestions = pool
+  const tabTarget = draft.length > 0 ? bestTagAutocomplete(tagDraft, pool, tagNames) : null;
+  const filteredSuggestions = pool
     .filter((name) => !tagNames.some((t) => t.toLowerCase() === name.toLowerCase()))
-    .filter((name) => (draft.length === 0 ? true : name.toLowerCase().includes(draft)))
-    .slice(0, draft.length === 0 ? 6 : 8);
+    .filter((name) => (draft.length === 0 ? true : name.toLowerCase().includes(draft)));
+  const suggestions = (() => {
+    const limit = draft.length === 0 ? 6 : 8;
+    if (!tabTarget) return filteredSuggestions.slice(0, limit);
+    const rest = filteredSuggestions.filter(
+      (name) => name.toLowerCase() !== tabTarget.toLowerCase(),
+    );
+    return [tabTarget, ...rest].slice(0, limit);
+  })();
+  const dueDate = dueFromLocal();
+
+  React.useLayoutEffect(() => {
+    const fromRect = pendingFlipFrom.current;
+    if (!fromRect) return;
+    pendingFlipFrom.current = null;
+
+    const added = tagNames[tagNames.length - 1];
+    if (!added) return;
+    const toEl = selectedChipEls.current.get(added.toLowerCase());
+    if (!toEl) return;
+
+    const toRect = toEl.getBoundingClientRect();
+    const dx = fromRect.left - toRect.left;
+    const dy = fromRect.top - toRect.top;
+    toEl.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px) scale(0.96)`, opacity: 0.7 },
+        { transform: "translate(0, 0) scale(1)", opacity: 1 },
+      ],
+      { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+  }, [tagNames]);
 
   function addTag(name: string): void {
     const trimmed = name.trim();
@@ -226,8 +405,23 @@ function TaskForm({
       setTagDraft("");
       return;
     }
+
+    const fromEl = suggestionChipEls.current.get(trimmed.toLowerCase());
+    pendingFlipFrom.current = fromEl?.getBoundingClientRect() ?? null;
+
     setTagNames((prev) => [...prev, trimmed]);
     setTagDraft("");
+  }
+
+  function setChipRef(
+    map: React.MutableRefObject<Map<string, HTMLSpanElement>>,
+    name: string,
+  ): (node: HTMLSpanElement | null) => void {
+    const key = name.toLowerCase();
+    return (node) => {
+      if (node) map.current.set(key, node);
+      else map.current.delete(key);
+    };
   }
 
   async function removeTagEntity(tag: Tag): Promise<void> {
@@ -268,6 +462,7 @@ function TaskForm({
     event?.preventDefault();
     if (!title.trim()) {
       setError("Title is required");
+      titleRef.current?.focus();
       return;
     }
     let due: Date;
@@ -275,6 +470,7 @@ function TaskForm({
       due = fromDatetimeLocalValue(dueLocal);
     } catch {
       setError("Due date and time are required");
+      dueRef.current?.focus();
       return;
     }
 
@@ -284,6 +480,11 @@ function TaskForm({
       const validation = validateCron(trimmed);
       if (!validation.ok) {
         setError(validation.error);
+        if (repeatPreset === "custom") {
+          document.getElementById("repeat-cron-raw")?.focus();
+        } else {
+          repeatRef.current?.focus();
+        }
         return;
       }
       nextCron = trimmed;
@@ -353,17 +554,20 @@ function TaskForm({
             <Label htmlFor="task-due">Due</Label>
             <Input
               id="task-due"
+              ref={dueRef}
               type="datetime-local"
               value={dueLocal}
               onChange={(e) => handleDueChange(e.target.value)}
               required
             />
+            <DueQuickPresetButtons dueDate={dueDate} onSelect={applyDueQuickPreset} />
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="task-repeat">Repeat</Label>
             <select
               id="task-repeat"
+              ref={repeatRef}
               className={selectClassName}
               value={repeatPreset}
               onChange={(e) => handlePresetChange(e.target.value as RepeatPreset)}
@@ -393,38 +597,66 @@ function TaskForm({
 
           <div className="grid gap-2">
             <Label htmlFor="task-tags">Tags</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {tagNames.map((name) => (
-                <TagChip
-                  key={name}
-                  name={name}
-                  variant="selected"
-                  onRemove={() => setTagNames((prev) => prev.filter((t) => t !== name))}
-                  onRequestDelete={() => void handleRequestDeleteTag(name)}
-                />
-              ))}
-            </div>
+            {tagNames.length > 0 && (
+              <div className="flex flex-wrap gap-1.5" aria-label="Selected tags">
+                {tagNames.map((name) => (
+                  <TagChip
+                    key={name}
+                    name={name}
+                    variant="selected"
+                    chipRef={setChipRef(selectedChipEls, name)}
+                    onRemove={() => setTagNames((prev) => prev.filter((t) => t !== name))}
+                    onRequestDelete={() => void handleRequestDeleteTag(name)}
+                  />
+                ))}
+              </div>
+            )}
             <Input
               id="task-tags"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
               onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+                  if (tagNames.length === 0) return;
+                  e.preventDefault();
+                  setTagNames((prev) => prev.slice(0, -1));
+                  return;
+                }
+                if (e.key === "Tab") {
+                  if (!tabTarget) return;
+                  e.preventDefault();
+                  addTag(tabTarget);
+                  return;
+                }
                 if (e.key === "Enter" || e.key === ",") {
                   e.preventDefault();
                   addTag(tagDraft);
                 }
               }}
-              placeholder="Type a tag, or pick a recent one"
+              placeholder="Type a tag, Tab to add"
+              aria-describedby={
+                suggestions.length > 0 ? "task-tag-suggestions" : undefined
+              }
+              autoComplete="off"
             />
             {suggestions.length > 0 && (
-              <div className="flex flex-wrap gap-1">
+              <div
+                id="task-tag-suggestions"
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label="Tag suggestions"
+              >
                 {suggestions.map((name) => {
                   const known = findTagByName(existingTags, name);
+                  const highlighted =
+                    tabTarget != null && name.toLowerCase() === tabTarget.toLowerCase();
                   return (
                     <TagChip
                       key={name}
                       name={name}
                       variant="suggestion"
+                      highlighted={highlighted}
+                      chipRef={setChipRef(suggestionChipEls, name)}
                       onAdd={() => addTag(name)}
                       {...(known
                         ? { onRequestDelete: () => void handleRequestDeleteTag(name) }
@@ -436,7 +668,11 @@ function TaskForm({
             )}
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
