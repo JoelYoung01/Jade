@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { nextOccurrences, validateCron } from "@/lib/repeat";
+import { applyDuePreset, type DueQuickPreset } from "@/lib/time";
 import type {
   CreateTaskInput,
   LaneVisibility,
@@ -181,29 +182,12 @@ export async function apiRescheduleTask(
   if (!isTauri()) {
     const task = mockStore.tasks.find((t) => t.id === id);
     if (!task) throw new Error("Task not found");
-    const current = new Date(task.due_at);
     let next: Date;
-    if (mode === "today") {
-      const today = new Date();
-      next = new Date(current);
-      next.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
-    } else if (mode === "tomorrow") {
-      next = new Date(current);
-      next.setDate(next.getDate() + 1);
-    } else if (mode === "next_monday") {
-      next = new Date(current);
-      const day = next.getDay();
-      const daysUntil = day === 1 ? 7 : (8 - day) % 7 || 7;
-      next.setDate(next.getDate() + daysUntil);
-    } else if (mode === "first_monday_next_month") {
-      next = new Date(current);
-      next.setDate(1);
-      next.setMonth(next.getMonth() + 1);
-      const day = next.getDay();
-      next.setDate(1 + ((8 - day) % 7));
-    } else {
+    if (mode === "custom") {
       if (!dueAt) throw new Error("Custom reschedule requires due date");
       next = new Date(dueAt);
+    } else {
+      next = applyDuePreset(new Date(task.due_at), mode as DueQuickPreset);
     }
     task.due_at = next.toISOString();
     task.updated_at = nowIso();
