@@ -27,9 +27,17 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { TagLabel } from "@/components/TagLabel";
 import { describeCron } from "@/lib/repeat";
+import { parseTagParts } from "@/lib/tags";
 import type { RescheduleMode, Task, TaskStatus } from "@/lib/types";
-import { formatDue, isOverdue, isToday, toDatetimeLocalValue } from "@/lib/time";
+import {
+  formatDue,
+  isOverdue,
+  matchesDueQuickPreset,
+  toDatetimeLocalValue,
+  type DueQuickPreset,
+} from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const STATUS_ORDER: TaskStatus[] = ["inactive", "active", "complete"];
@@ -40,25 +48,52 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   complete: "Complete",
 };
 
+const RESCHEDULE_PRESETS: { mode: DueQuickPreset; label: string }[] = [
+  { mode: "today", label: "Today" },
+  { mode: "tomorrow", label: "Tomorrow" },
+  { mode: "next_monday", label: "Next Monday" },
+  { mode: "first_monday_next_month", label: "First Monday of Next Month" },
+];
+
 function nextStatus(status: TaskStatus): TaskStatus | null {
   const index = STATUS_ORDER.indexOf(status);
   if (index < 0 || index >= STATUS_ORDER.length - 1) return null;
   return STATUS_ORDER[index + 1] ?? null;
 }
 
+/** Shared next status when every target has the same status; otherwise null. */
+function sharedNextStatus(tasks: Task[]): TaskStatus | null {
+  if (tasks.length === 0) return null;
+  const first = tasks[0]!.status;
+  if (!tasks.every((t) => t.status === first)) return null;
+  return nextStatus(first);
+}
+
 export type ReschedulePreset = Exclude<RescheduleMode, "custom">;
 
 type TaskCardProps = {
   task: Task;
+  now: Date;
+  selected: boolean;
+  selectedTasks: Task[];
+  onToggleSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onPrepareContextSelection: (id: string) => void;
   onEdit: (task: Task) => void;
-  onUpdateStatus: (id: string, status: TaskStatus) => void;
-  onReschedule: (id: string, mode: ReschedulePreset) => void;
-  onRescheduleCustom: (id: string, dueAt: string) => void;
-  onDelete: (id: string) => void;
+  onUpdateStatus: (ids: string[], status: TaskStatus) => void;
+  onReschedule: (ids: string[], mode: ReschedulePreset) => void;
+  onRescheduleCustom: (ids: string[], dueAt: string) => void;
+  onDelete: (ids: string[]) => void;
 };
 
 export function TaskCard({
   task,
+  now,
+  selected,
+  selectedTasks,
+  onToggleSelect,
+  onClearSelection,
+  onPrepareContextSelection,
   onEdit,
   onUpdateStatus,
   onReschedule,
@@ -71,6 +106,7 @@ export function TaskCard({
   });
   const [customOpen, setCustomOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [menuTargets, setMenuTargets] = React.useState<Task[]>([task]);
   const [customDue, setCustomDue] = React.useState(() =>
     toDatetimeLocalValue(new Date(task.due_at)),
   );
@@ -81,34 +117,64 @@ export function TaskCard({
     opacity: isDragging ? 0.55 : 1,
   };
 
+  const targetIds = menuTargets.map((t) => t.id);
+  const multi = menuTargets.length > 1;
+  const moveTo = sharedNextStatus(menuTargets);
+
   function confirmDelete(): void {
-    onDelete(task.id);
+    onDelete(targetIds);
     setDeleteOpen(false);
   }
 
-  const advanceTo = nextStatus(task.status);
-  const dueToday = isToday(task.due_at);
-  const overdue = task.status !== "complete" && isOverdue(task.due_at);
+  const overdue = task.status !== "complete" && isOverdue(task.due_at, now);
   const repeatLabel = task.repeat_cron ? describeCron(task.repeat_cron) : null;
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu
+        onOpenChange={(open) => {
+          if (!open) return;
+          const targets =
+            selected && selectedTasks.length > 1 ? selectedTasks : [task];
+          setMenuTargets(targets);
+          onPrepareContextSelection(task.id);
+        }}
+      >
         <ContextMenuTrigger asChild>
           <div data-flip-id={task.id} className="w-full shrink-0 will-change-transform">
             <article
               ref={setNodeRef}
               style={style}
+              aria-selected={selected}
               className={cn(
                 "cursor-grab rounded-md border border-transparent bg-card/70 px-3 py-2.5 transition-colors hover:border-border active:cursor-grabbing",
+                selected && "border-primary/50 bg-primary/10 ring-1 ring-primary/35",
                 isDragging && "shadow-lg ring-1 ring-primary/40",
               )}
+              onClick={(event) => {
+                if (event.ctrlKey || event.metaKey) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onToggleSelect(task.id);
+                  return;
+                }
+                if (selectedTasks.length > 0) {
+                  onClearSelection();
+                }
+              }}
               onDoubleClick={(event) => {
                 event.stopPropagation();
                 onEdit(task);
               }}
               {...listeners}
               {...attributes}
+              onPointerDown={(event) => {
+                if (event.ctrlKey || event.metaKey) {
+                  // Keep dnd-kit from starting a drag on modifier-click select.
+                  return;
+                }
+                listeners.onPointerDown?.(event);
+              }}
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-medium leading-snug text-foreground">{task.title}</h3>
@@ -137,71 +203,94 @@ export function TaskCard({
                 {overdue ? (
                   <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
                 ) : null}
-                <span>{formatDue(task.due_at)}</span>
+                <span>{formatDue(task.due_at, now)}</span>
                 {overdue ? <span className="sr-only">Overdue</span> : null}
               </p>
               {task.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {task.tags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="rounded bg-secondary px-1.5 py-0.5 text-[10px] tracking-wide text-secondary-foreground uppercase"
-                    >
-                      {tag.name}
-                    </span>
-                  ))}
+                  {task.tags.map((tag) => {
+                    const keyed = parseTagParts(tag.name).kind === "keyed";
+                    return (
+                      <span
+                        key={tag.id}
+                        className={cn(
+                          "rounded bg-secondary text-[10px] text-secondary-foreground",
+                          keyed ? "py-0 pl-0 pr-1.5" : "px-1.5 py-0.5",
+                        )}
+                      >
+                        <TagLabel
+                          name={tag.name}
+                          flushKey={keyed}
+                          className={keyed ? "rounded" : undefined}
+                        />
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </article>
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onSelect={() => onEdit(task)}>Edit…</ContextMenuItem>
-          {advanceTo ? (
-            <ContextMenuItem onSelect={() => onUpdateStatus(task.id, advanceTo)}>
-              Advance to {STATUS_LABEL[advanceTo]}
+          {!multi ? (
+            <ContextMenuItem onSelect={() => onEdit(task)}>Edit…</ContextMenuItem>
+          ) : null}
+          {moveTo ? (
+            <ContextMenuItem onSelect={() => onUpdateStatus(targetIds, moveTo)}>
+              Move to {STATUS_LABEL[moveTo]}
+              {multi ? ` (${menuTargets.length})` : ""}
             </ContextMenuItem>
           ) : null}
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Update status</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>
+              Update status
+              {multi ? ` (${menuTargets.length})` : ""}
+            </ContextMenuSubTrigger>
             <ContextMenuSubContent>
-              {STATUS_ORDER.map((status) => (
-                <ContextMenuItem
-                  key={status}
-                  disabled={status === task.status}
-                  onSelect={() => onUpdateStatus(task.id, status)}
-                >
-                  {STATUS_LABEL[status]}
-                  {status === task.status ? " ✓" : ""}
-                </ContextMenuItem>
-              ))}
+              {STATUS_ORDER.map((status) => {
+                const allHave = menuTargets.every((t) => t.status === status);
+                return (
+                  <ContextMenuItem
+                    key={status}
+                    disabled={allHave}
+                    onSelect={() => onUpdateStatus(targetIds, status)}
+                  >
+                    {STATUS_LABEL[status]}
+                    {allHave ? " ✓" : ""}
+                  </ContextMenuItem>
+                );
+              })}
             </ContextMenuSubContent>
           </ContextMenuSub>
           <ContextMenuSeparator />
           <ContextMenuSub>
-            <ContextMenuSubTrigger>Reschedule</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>
+              Reschedule
+              {multi ? ` (${menuTargets.length})` : ""}
+            </ContextMenuSubTrigger>
             <ContextMenuSubContent>
-              <ContextMenuItem
-                disabled={dueToday}
-                onSelect={() => onReschedule(task.id, "today")}
-              >
-                Today
-                {dueToday ? " ✓" : ""}
-              </ContextMenuItem>
-              <ContextMenuItem onSelect={() => onReschedule(task.id, "tomorrow")}>
-                Tomorrow
-              </ContextMenuItem>
-              <ContextMenuItem onSelect={() => onReschedule(task.id, "next_monday")}>
-                Next Monday
-              </ContextMenuItem>
-              <ContextMenuItem
-                onSelect={() => onReschedule(task.id, "first_monday_next_month")}
-              >
-                First Monday of Next Month
-              </ContextMenuItem>
+              {RESCHEDULE_PRESETS.map(({ mode, label }) => {
+                const allMatch = menuTargets.every((t) =>
+                  matchesDueQuickPreset(new Date(t.due_at), mode, now),
+                );
+                return (
+                  <ContextMenuItem
+                    key={mode}
+                    disabled={allMatch}
+                    onSelect={() => onReschedule(targetIds, mode)}
+                  >
+                    {label}
+                    {allMatch ? " ✓" : ""}
+                  </ContextMenuItem>
+                );
+              })}
               <ContextMenuItem
                 onSelect={() => {
-                  setCustomDue(toDatetimeLocalValue(new Date(task.due_at)));
+                  setCustomDue(
+                    toDatetimeLocalValue(
+                      new Date(menuTargets[0]?.due_at ?? task.due_at),
+                    ),
+                  );
                   setCustomOpen(true);
                 }}
               >
@@ -215,6 +304,7 @@ export function TaskCard({
             onSelect={() => setDeleteOpen(true)}
           >
             Delete
+            {multi ? ` (${menuTargets.length})` : ""}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -227,9 +317,13 @@ export function TaskCard({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Delete task?</DialogTitle>
+            <DialogTitle>
+              {multi ? `Delete ${menuTargets.length} tasks?` : "Delete task?"}
+            </DialogTitle>
             <DialogDescription>
-              “{task.title}” will be removed from your board.
+              {multi
+                ? "The selected tasks will be removed from your board."
+                : `“${task.title}” will be removed from your board.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
@@ -252,7 +346,11 @@ export function TaskCard({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg border border-border bg-popover p-4 shadow-xl">
             <h4 className="font-display text-sm font-semibold">Reschedule</h4>
-            <p className="mt-1 text-xs text-muted-foreground">{task.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {multi
+                ? `${menuTargets.length} selected tasks`
+                : task.title}
+            </p>
             <Input
               className="mt-3"
               type="datetime-local"
@@ -273,7 +371,7 @@ export function TaskCard({
                 onClick={() => {
                   const date = new Date(customDue);
                   if (!Number.isNaN(date.getTime())) {
-                    onRescheduleCustom(task.id, date.toISOString());
+                    onRescheduleCustom(targetIds, date.toISOString());
                     setCustomOpen(false);
                   }
                 }}

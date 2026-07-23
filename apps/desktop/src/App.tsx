@@ -32,6 +32,7 @@ import {
 import type { LaneVisibility, Tag, Task, TaskFormValues, TaskStatus } from "@/lib/types";
 import { formatDue, isOverdue } from "@/lib/time";
 import { recentTagNames } from "@/lib/tags";
+import { useNow } from "@/lib/useNow";
 import { cn } from "@/lib/utils";
 
 const STATUS_LANES: TaskStatus[] = ["inactive", "active", "complete"];
@@ -41,6 +42,7 @@ function isStatus(value: string): value is TaskStatus {
 }
 
 export default function App(): React.JSX.Element {
+  const now = useNow();
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [tags, setTags] = React.useState<Tag[]>([]);
   const [visibility, setVisibility] = React.useState<LaneVisibility>({
@@ -53,6 +55,9 @@ export default function App(): React.JSX.Element {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -91,18 +96,27 @@ export default function App(): React.JSX.Element {
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
+      const target = event.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      if (event.key === "Escape" && selectedIds.size > 0 && !inField) {
+        setSelectedIds(new Set());
+        return;
+      }
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
-        const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
-          return;
-        }
+        if (inField) return;
         event.preventDefault();
         openCreate();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [selectedIds]);
 
   async function handleCreate(input: TaskFormValues): Promise<void> {
     await apiCreateTask({
@@ -155,48 +169,93 @@ export default function App(): React.JSX.Element {
     }
   }
 
-  async function handleReschedule(id: string, mode: ReschedulePreset): Promise<void> {
+  function toggleSelect(id: string): void {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection(): void {
+    setSelectedIds(new Set());
+  }
+
+  /** Right-click on an unselected card while others are selected scopes to that card only. */
+  function prepareContextSelection(id: string): void {
+    setSelectedIds((prev) => {
+      if (prev.size === 0 || prev.has(id)) return prev;
+      return new Set([id]);
+    });
+  }
+
+  async function handleReschedule(ids: string[], mode: ReschedulePreset): Promise<void> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return;
     try {
-      const updated = await apiRescheduleTask(id, mode);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      const updated = await Promise.all(unique.map((id) => apiRescheduleTask(id, mode)));
+      const byId = new Map(updated.map((task) => [task.id, task]));
+      setTasks((prev) => prev.map((t) => byId.get(t.id) ?? t));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       await refresh();
     }
   }
 
-  async function handleRescheduleCustom(id: string, dueAt: string): Promise<void> {
+  async function handleRescheduleCustom(ids: string[], dueAt: string): Promise<void> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return;
     try {
-      const updated = await apiRescheduleTask(id, "custom", dueAt);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      const updated = await Promise.all(
+        unique.map((id) => apiRescheduleTask(id, "custom", dueAt)),
+      );
+      const byId = new Map(updated.map((task) => [task.id, task]));
+      setTasks((prev) => prev.map((t) => byId.get(t.id) ?? t));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       await refresh();
     }
   }
 
-  async function handleDelete(id: string): Promise<void> {
+  async function handleDelete(ids: string[]): Promise<void> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return;
     try {
-      await apiDeleteTask(id);
+      await Promise.all(unique.map((id) => apiDeleteTask(id)));
+      setSelectedIds(new Set());
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   }
 
-  async function handleUpdateStatus(id: string, status: TaskStatus): Promise<void> {
-    const task = tasks.find((t) => t.id === id);
-    if (!task || task.status === status) return;
+  async function handleUpdateStatus(ids: string[], status: TaskStatus): Promise<void> {
+    const unique = [...new Set(ids)];
+    const toUpdate = unique.filter((id) => {
+      const task = tasks.find((t) => t.id === id);
+      return task != null && task.status !== status;
+    });
+    if (toUpdate.length === 0) return;
 
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
+    setTasks((prev) =>
+      prev.map((t) => (toUpdate.includes(t.id) ? { ...t, status } : t)),
+    );
     try {
-      const result = await apiUpdateTaskStatus(id, status);
+      const results = await Promise.all(
+        toUpdate.map((id) => apiUpdateTaskStatus(id, status)),
+      );
       setTasks((prev) => {
-        const withoutOld = prev.map((t) => (t.id === id ? result.task : t));
-        if (!result.spawned) return withoutOld;
-        if (withoutOld.some((t) => t.id === result.spawned!.id)) return withoutOld;
-        return [...withoutOld, result.spawned];
+        let next = prev;
+        for (const result of results) {
+          next = next.map((t) => (t.id === result.task.id ? result.task : t));
+          if (result.spawned && !next.some((t) => t.id === result.spawned!.id)) {
+            next = [...next, result.spawned];
+          }
+        }
+        return next;
       });
+      setSelectedIds(new Set());
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -254,33 +313,37 @@ export default function App(): React.JSX.Element {
             <div className="flex min-h-0 flex-1 flex-col">
               <TaskBoard
                 tasks={tasks}
-                tags={tags}
+                now={now}
                 visible={visibility}
                 animateLayout={activeId === null}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onClearSelection={clearSelection}
+                onPrepareContextSelection={prepareContextSelection}
                 onToggleLane={(status) => void handleToggleLane(status)}
                 onEdit={openEdit}
-                onUpdateStatus={(id, status) => void handleUpdateStatus(id, status)}
-                onReschedule={(id, mode) => void handleReschedule(id, mode)}
-                onRescheduleCustom={(id, dueAt) => void handleRescheduleCustom(id, dueAt)}
-                onDelete={(id) => void handleDelete(id)}
+                onUpdateStatus={(ids, status) => void handleUpdateStatus(ids, status)}
+                onReschedule={(ids, mode) => void handleReschedule(ids, mode)}
+                onRescheduleCustom={(ids, dueAt) => void handleRescheduleCustom(ids, dueAt)}
+                onDelete={(ids) => void handleDelete(ids)}
               />
             </div>
-            <DragOverlay>
+            <DragOverlay dropAnimation={null}>
               {activeTask ? (
                 <div className="rounded-md border border-primary/40 bg-card px-3 py-2.5 shadow-xl">
                   <p className="text-sm font-medium">{activeTask.title}</p>
                   <p
                     className={cn(
                       "mt-1 flex items-center gap-1 text-xs",
-                      activeTask.status !== "complete" && isOverdue(activeTask.due_at)
+                      activeTask.status !== "complete" && isOverdue(activeTask.due_at, now)
                         ? "font-medium text-red-400"
                         : "text-muted-foreground",
                     )}
                   >
-                    {activeTask.status !== "complete" && isOverdue(activeTask.due_at) ? (
+                    {activeTask.status !== "complete" && isOverdue(activeTask.due_at, now) ? (
                       <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
                     ) : null}
-                    <span>{formatDue(activeTask.due_at)}</span>
+                    <span>{formatDue(activeTask.due_at, now)}</span>
                   </p>
                 </div>
               ) : null}

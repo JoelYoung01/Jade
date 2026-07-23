@@ -4,7 +4,13 @@ import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { TaskCard, type ReschedulePreset } from "@/components/TaskCard";
-import type { Tag, Task, TaskStatus } from "@/lib/types";
+import type { Task, TaskStatus } from "@/lib/types";
+import {
+  type DateRangePreset,
+  matchesDueDateRange,
+  resolveDateRangeBounds,
+  toDateInputValue,
+} from "@/lib/time";
 import { useFlipLayout } from "@/lib/useFlipLayout";
 import { cn } from "@/lib/utils";
 
@@ -17,16 +23,28 @@ const LANE_META: Record<TaskStatus, { title: string; hint: string }> = {
 type LaneProps = {
   status: TaskStatus;
   tasks: Task[];
+  now: Date;
+  selectedIds: ReadonlySet<string>;
+  selectedTasks: Task[];
+  onToggleSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onPrepareContextSelection: (id: string) => void;
   onEdit: (task: Task) => void;
-  onUpdateStatus: (id: string, status: TaskStatus) => void;
-  onReschedule: (id: string, mode: ReschedulePreset) => void;
-  onRescheduleCustom: (id: string, dueAt: string) => void;
-  onDelete: (id: string) => void;
+  onUpdateStatus: (ids: string[], status: TaskStatus) => void;
+  onReschedule: (ids: string[], mode: ReschedulePreset) => void;
+  onRescheduleCustom: (ids: string[], dueAt: string) => void;
+  onDelete: (ids: string[]) => void;
 };
 
 function Lane({
   status,
   tasks,
+  now,
+  selectedIds,
+  selectedTasks,
+  onToggleSelect,
+  onClearSelection,
+  onPrepareContextSelection,
   onEdit,
   onUpdateStatus,
   onReschedule,
@@ -53,6 +71,11 @@ function Lane({
           "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg border border-dashed border-border/50 p-2 transition-colors",
           isOver && "border-primary/50 bg-primary/5",
         )}
+        onPointerDown={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-flip-id]")) return;
+          onClearSelection();
+        }}
       >
         {tasks.length === 0 ? (
           <p className="px-1 py-8 text-center text-xs text-muted-foreground/70">No tasks</p>
@@ -61,6 +84,12 @@ function Lane({
             <TaskCard
               key={task.id}
               task={task}
+              now={now}
+              selected={selectedIds.has(task.id)}
+              selectedTasks={selectedTasks}
+              onToggleSelect={onToggleSelect}
+              onClearSelection={onClearSelection}
+              onPrepareContextSelection={onPrepareContextSelection}
               onEdit={onEdit}
               onUpdateStatus={onUpdateStatus}
               onReschedule={onReschedule}
@@ -76,23 +105,52 @@ function Lane({
 
 type TaskBoardProps = {
   tasks: Task[];
-  tags: Tag[];
+  now: Date;
   visible: Record<TaskStatus, boolean>;
   /** When false, skip FLIP (e.g. while a card is being dragged). */
   animateLayout?: boolean;
+  selectedIds: ReadonlySet<string>;
+  onToggleSelect: (id: string) => void;
+  onClearSelection: () => void;
+  onPrepareContextSelection: (id: string) => void;
   onToggleLane: (status: TaskStatus) => void;
   onEdit: (task: Task) => void;
-  onUpdateStatus: (id: string, status: TaskStatus) => void;
-  onReschedule: (id: string, mode: ReschedulePreset) => void;
-  onRescheduleCustom: (id: string, dueAt: string) => void;
-  onDelete: (id: string) => void;
+  onUpdateStatus: (ids: string[], status: TaskStatus) => void;
+  onReschedule: (ids: string[], mode: ReschedulePreset) => void;
+  onRescheduleCustom: (ids: string[], dueAt: string) => void;
+  onDelete: (ids: string[]) => void;
 };
 
 const ORDER: TaskStatus[] = ["inactive", "active", "complete"];
 
-function matchesFilters(task: Task, textQuery: string, tagId: string): boolean {
-  if (tagId && !task.tags.some((tag) => tag.id === tagId)) {
-    return false;
+const DATE_RANGE_OPTIONS: { value: DateRangePreset; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "this_week", label: "This week" },
+  { value: "all_time", label: "All time" },
+  { value: "custom", label: "Custom" },
+];
+
+type BoardFilters = {
+  textQuery: string;
+  datePreset: DateRangePreset;
+  customFrom: string;
+  customTo: string;
+  now?: Date;
+};
+
+function matchesFilters(task: Task, filters: BoardFilters): boolean {
+  const { textQuery, datePreset, customFrom, customTo, now } = filters;
+
+  if (datePreset !== "all_time") {
+    const bounds = resolveDateRangeBounds(datePreset, customFrom, customTo, now);
+    if (
+      !matchesDueDateRange(task.due_at, bounds, {
+        now,
+        isComplete: task.status === "complete",
+      })
+    ) {
+      return false;
+    }
   }
 
   const query = textQuery.trim().toLowerCase();
@@ -106,9 +164,13 @@ function matchesFilters(task: Task, textQuery: string, tagId: string): boolean {
 
 export function TaskBoard({
   tasks,
-  tags,
+  now,
   visible,
   animateLayout = true,
+  selectedIds,
+  onToggleSelect,
+  onClearSelection,
+  onPrepareContextSelection,
   onToggleLane,
   onEdit,
   onUpdateStatus,
@@ -117,10 +179,17 @@ export function TaskBoard({
   onDelete,
 }: TaskBoardProps): React.JSX.Element {
   const [textQuery, setTextQuery] = React.useState("");
-  const [tagId, setTagId] = React.useState("");
+  const [datePreset, setDatePreset] = React.useState<DateRangePreset>("today");
+  const [customFrom, setCustomFrom] = React.useState(() => toDateInputValue(new Date()));
+  const [customTo, setCustomTo] = React.useState(() => toDateInputValue(new Date()));
   const lanesRef = React.useRef<HTMLDivElement>(null);
 
-  const filtered = tasks.filter((task) => matchesFilters(task, textQuery, tagId));
+  const selectClassName =
+    "h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  const filtered = tasks.filter((task) =>
+    matchesFilters(task, { textQuery, datePreset, customFrom, customTo, now }),
+  );
 
   const tasksByLane = React.useMemo(() => {
     const groups: Record<TaskStatus, Task[]> = {
@@ -139,6 +208,11 @@ export function TaskBoard({
     return groups;
   }, [filtered]);
 
+  const selectedTasks = React.useMemo(
+    () => tasks.filter((task) => selectedIds.has(task.id)),
+    [tasks, selectedIds],
+  );
+
   const visibleLanes = ORDER.filter((s) => visible[s]);
 
   const layoutKey = React.useMemo(() => {
@@ -149,10 +223,19 @@ export function TaskBoard({
           .join(","),
       )
       .join("|");
-    return `${lanes}#q:${textQuery}#tag:${tagId}`;
-  }, [tasksByLane, visibleLanes, textQuery, tagId]);
+    return `${lanes}#q:${textQuery}#date:${datePreset}:${customFrom}:${customTo}`;
+  }, [tasksByLane, visibleLanes, textQuery, datePreset, customFrom, customTo]);
 
   useFlipLayout(lanesRef, layoutKey, animateLayout);
+
+  function handleDatePresetChange(next: DateRangePreset): void {
+    setDatePreset(next);
+    if (next === "custom") {
+      const today = toDateInputValue(new Date());
+      setCustomFrom((prev) => prev || today);
+      setCustomTo((prev) => prev || today);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 py-4">
@@ -169,20 +252,44 @@ export function TaskBoard({
         </div>
 
         <select
-          value={tagId}
-          onChange={(e) => setTagId(e.target.value)}
-          aria-label="Filter by tag"
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={datePreset}
+          onChange={(e) => handleDatePresetChange(e.target.value as DateRangePreset)}
+          aria-label="Filter by due date range"
+          className={selectClassName}
         >
-          <option value="">All tags</option>
-          {tags.map((tag) => (
-            <option key={tag.id} value={tag.id}>
-              {tag.name}
+          {DATE_RANGE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
 
+        {datePreset === "custom" ? (
+          <>
+            <Input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              aria-label="Custom range start"
+              className="h-8 w-auto text-xs"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              aria-label="Custom range end"
+              className="h-8 w-auto text-xs"
+            />
+          </>
+        ) : null}
+
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {selectedIds.size > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.size} selected
+            </span>
+          ) : null}
           <span className="text-xs text-muted-foreground">Lanes</span>
           {ORDER.map((status) => (
             <button
@@ -204,12 +311,24 @@ export function TaskBoard({
       </div>
 
       {visibleLanes.length > 0 ? (
-        <div ref={lanesRef} className="flex min-h-0 flex-1 gap-3">
+        <div
+          ref={lanesRef}
+          className="flex min-h-0 flex-1 gap-3"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) onClearSelection();
+          }}
+        >
           {visibleLanes.map((status) => (
             <Lane
               key={status}
               status={status}
               tasks={tasksByLane[status]}
+              now={now}
+              selectedIds={selectedIds}
+              selectedTasks={selectedTasks}
+              onToggleSelect={onToggleSelect}
+              onClearSelection={onClearSelection}
+              onPrepareContextSelection={onPrepareContextSelection}
               onEdit={onEdit}
               onUpdateStatus={onUpdateStatus}
               onReschedule={onReschedule}
