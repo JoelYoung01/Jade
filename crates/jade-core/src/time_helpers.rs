@@ -38,23 +38,43 @@ fn on_local_date(date: chrono::NaiveDate, time: NaiveTime) -> DateTime<Utc> {
 /// Keep the same local time-of-day, move the calendar date to today.
 #[must_use]
 pub fn push_to_today(due_at: DateTime<Utc>) -> DateTime<Utc> {
-    let local = due_at.with_timezone(&Local);
-    on_local_date(Local::now().date_naive(), local.time())
+    push_to_today_at(due_at, Utc::now())
 }
 
-/// Keep the same local time-of-day, move the calendar date to tomorrow.
+/// Like [`push_to_today`], but with an explicit `now` (for tests).
+#[must_use]
+pub fn push_to_today_at(due_at: DateTime<Utc>, now: DateTime<Utc>) -> DateTime<Utc> {
+    let local = due_at.with_timezone(&Local);
+    on_local_date(now.with_timezone(&Local).date_naive(), local.time())
+}
+
+/// Keep the same local time-of-day, move the calendar date to tomorrow (relative to now).
 #[must_use]
 pub fn push_to_tomorrow(due_at: DateTime<Utc>) -> DateTime<Utc> {
-    let local = due_at.with_timezone(&Local);
-    on_local_date(local.date_naive() + Duration::days(1), local.time())
+    push_to_tomorrow_at(due_at, Utc::now())
 }
 
-/// Move to the next Monday, preserving local time-of-day.
-/// If already Monday, jumps to the following Monday.
+/// Like [`push_to_tomorrow`], but with an explicit `now` (for tests).
+#[must_use]
+pub fn push_to_tomorrow_at(due_at: DateTime<Utc>, now: DateTime<Utc>) -> DateTime<Utc> {
+    let local = due_at.with_timezone(&Local);
+    let tomorrow = now.with_timezone(&Local).date_naive() + Duration::days(1);
+    on_local_date(tomorrow, local.time())
+}
+
+/// Move to the next Monday after today, preserving local time-of-day.
+/// If today is Monday, jumps to the following Monday.
 #[must_use]
 pub fn next_monday(due_at: DateTime<Utc>) -> DateTime<Utc> {
+    next_monday_at(due_at, Utc::now())
+}
+
+/// Like [`next_monday`], but with an explicit `now` (for tests).
+#[must_use]
+pub fn next_monday_at(due_at: DateTime<Utc>, now: DateTime<Utc>) -> DateTime<Utc> {
     let local = due_at.with_timezone(&Local);
-    let days_until = match local.weekday() {
+    let now_local = now.with_timezone(&Local);
+    let days_until = match now_local.weekday() {
         Weekday::Mon => 7,
         Weekday::Tue => 6,
         Weekday::Wed => 5,
@@ -63,17 +83,27 @@ pub fn next_monday(due_at: DateTime<Utc>) -> DateTime<Utc> {
         Weekday::Sat => 2,
         Weekday::Sun => 1,
     };
-    on_local_date(local.date_naive() + Duration::days(days_until), local.time())
+    on_local_date(
+        now_local.date_naive() + Duration::days(days_until),
+        local.time(),
+    )
 }
 
-/// Move to the first Monday of the following month, preserving local time-of-day.
+/// Move to the first Monday of the month after today, preserving local time-of-day.
 #[must_use]
 pub fn first_monday_next_month(due_at: DateTime<Utc>) -> DateTime<Utc> {
+    first_monday_next_month_at(due_at, Utc::now())
+}
+
+/// Like [`first_monday_next_month`], but with an explicit `now` (for tests).
+#[must_use]
+pub fn first_monday_next_month_at(due_at: DateTime<Utc>, now: DateTime<Utc>) -> DateTime<Utc> {
     let local = due_at.with_timezone(&Local);
-    let (year, month) = if local.month() == 12 {
-        (local.year() + 1, 1)
+    let now_local = now.with_timezone(&Local);
+    let (year, month) = if now_local.month() == 12 {
+        (now_local.year() + 1, 1)
     } else {
-        (local.year(), local.month() + 1)
+        (now_local.year(), now_local.month() + 1)
     };
     let first = chrono::NaiveDate::from_ymd_opt(year, month, 1).expect("valid first of month");
     let days_until = (7 - first.weekday().num_days_from_monday()) % 7;
@@ -110,58 +140,69 @@ mod tests {
 
     #[test]
     fn push_to_today_preserves_time() {
-        let local = Local::now() - Duration::days(3);
-        let local = local
-            .with_hour(9)
-            .and_then(|dt| dt.with_minute(30))
-            .and_then(|dt| dt.with_second(0))
-            .and_then(|dt| dt.with_nanosecond(0))
-            .unwrap();
-        let result = push_to_today(local.with_timezone(&Utc)).with_timezone(&Local);
-        assert_eq!(result.date_naive(), Local::now().date_naive());
-        assert_eq!(result.time(), local.time());
+        let now = Local.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 7, 22, 9, 30, 0).unwrap();
+        let result =
+            push_to_today_at(due.with_timezone(&Utc), now.with_timezone(&Utc)).with_timezone(&Local);
+        assert_eq!(result.date_naive(), now.date_naive());
+        assert_eq!(result.time(), due.time());
     }
 
     #[test]
-    fn push_to_tomorrow_preserves_time() {
-        let local = Local.with_ymd_and_hms(2026, 7, 20, 9, 30, 0).unwrap();
-        let due = local.with_timezone(&Utc);
-        let result = push_to_tomorrow(due).with_timezone(&Local);
-        assert_eq!(result.date_naive(), local.date_naive() + Duration::days(1));
-        assert_eq!(result.time(), local.time());
+    fn push_to_tomorrow_is_relative_to_now_not_due() {
+        // Due is Wednesday; now is Monday → tomorrow is Tuesday the 21st.
+        let now = Local.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 7, 22, 9, 30, 0).unwrap();
+        let result = push_to_tomorrow_at(due.with_timezone(&Utc), now.with_timezone(&Utc))
+            .with_timezone(&Local);
+        assert_eq!(
+            result.date_naive(),
+            chrono::NaiveDate::from_ymd_opt(2026, 7, 21).unwrap()
+        );
+        assert_eq!(result.time(), due.time());
+
+        // Applying again stays on tomorrow (idempotent vs advancing from due).
+        let again = push_to_tomorrow_at(result.with_timezone(&Utc), now.with_timezone(&Utc))
+            .with_timezone(&Local);
+        assert_eq!(again.date_naive(), result.date_naive());
     }
 
     #[test]
-    fn next_monday_from_wednesday() {
-        // 2026-07-22 is a Wednesday
-        let local = Local.with_ymd_and_hms(2026, 7, 22, 10, 0, 0).unwrap();
-        let result = next_monday(local.with_timezone(&Utc)).with_timezone(&Local);
+    fn next_monday_from_wednesday_now() {
+        // now 2026-07-22 Wednesday → next Monday is 2026-07-27
+        let now = Local.with_ymd_and_hms(2026, 7, 22, 8, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 7, 15, 10, 0, 0).unwrap();
+        let result =
+            next_monday_at(due.with_timezone(&Utc), now.with_timezone(&Utc)).with_timezone(&Local);
         assert_eq!(result.weekday(), Weekday::Mon);
         assert_eq!(
             result.date_naive(),
             chrono::NaiveDate::from_ymd_opt(2026, 7, 27).unwrap()
         );
-        assert_eq!(result.time(), local.time());
+        assert_eq!(result.time(), due.time());
     }
 
     #[test]
-    fn first_monday_next_month_from_mid_month() {
-        // Due 2026-07-15 → next month is August; 2026-08-03 is the first Monday
-        let local = Local.with_ymd_and_hms(2026, 7, 15, 10, 30, 0).unwrap();
-        let result = first_monday_next_month(local.with_timezone(&Utc)).with_timezone(&Local);
+    fn first_monday_next_month_from_now_not_due() {
+        // Due in December, but now is July → first Monday of August
+        let now = Local.with_ymd_and_hms(2026, 7, 15, 10, 30, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 12, 10, 10, 30, 0).unwrap();
+        let result = first_monday_next_month_at(due.with_timezone(&Utc), now.with_timezone(&Utc))
+            .with_timezone(&Local);
         assert_eq!(result.weekday(), Weekday::Mon);
         assert_eq!(
             result.date_naive(),
             chrono::NaiveDate::from_ymd_opt(2026, 8, 3).unwrap()
         );
-        assert_eq!(result.time(), local.time());
+        assert_eq!(result.time(), due.time());
     }
 
     #[test]
     fn first_monday_next_month_rolls_year() {
-        // Due December 2026 → January 2027; 2027-01-04 is the first Monday
-        let local = Local.with_ymd_and_hms(2026, 12, 10, 8, 0, 0).unwrap();
-        let result = first_monday_next_month(local.with_timezone(&Utc)).with_timezone(&Local);
+        let now = Local.with_ymd_and_hms(2026, 12, 10, 8, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 7, 1, 8, 0, 0).unwrap();
+        let result = first_monday_next_month_at(due.with_timezone(&Utc), now.with_timezone(&Utc))
+            .with_timezone(&Local);
         assert_eq!(
             result.date_naive(),
             chrono::NaiveDate::from_ymd_opt(2027, 1, 4).unwrap()
@@ -170,9 +211,10 @@ mod tests {
 
     #[test]
     fn first_monday_next_month_when_first_is_monday() {
-        // Due January 2027 → February 2027; 2027-02-01 is a Monday
-        let local = Local.with_ymd_and_hms(2027, 1, 15, 9, 0, 0).unwrap();
-        let result = first_monday_next_month(local.with_timezone(&Utc)).with_timezone(&Local);
+        let now = Local.with_ymd_and_hms(2027, 1, 15, 9, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 7, 1, 9, 0, 0).unwrap();
+        let result = first_monday_next_month_at(due.with_timezone(&Utc), now.with_timezone(&Utc))
+            .with_timezone(&Local);
         assert_eq!(
             result.date_naive(),
             chrono::NaiveDate::from_ymd_opt(2027, 2, 1).unwrap()
@@ -181,9 +223,11 @@ mod tests {
 
     #[test]
     fn next_monday_from_monday_skips_to_following() {
-        // 2026-07-20 is a Monday
-        let local = Local.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
-        let result = next_monday(local.with_timezone(&Utc)).with_timezone(&Local);
+        // now 2026-07-20 Monday → following Monday is 2026-07-27
+        let now = Local.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
+        let due = Local.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
+        let result =
+            next_monday_at(due.with_timezone(&Utc), now.with_timezone(&Utc)).with_timezone(&Local);
         assert_eq!(result.weekday(), Weekday::Mon);
         assert_eq!(
             result.date_naive(),

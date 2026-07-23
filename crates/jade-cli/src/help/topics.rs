@@ -217,16 +217,15 @@ const TASKS_UPDATE_DUE: &str = "\
 jade tasks update --due — reschedule a task
 
 PURPOSE
-  Change when a task is due. Presets are relative to the task's current due_at
-  (same local time-of-day rules as the desktop app). Absolute values replace
-  due_at outright.
+  Change when a task is due. Presets set the calendar date relative to today
+  (keeping the task's local time-of-day). Absolute values replace due_at outright.
 
 USAGE
   jade tasks update --id <uuid> --due <value>
 
 ALLOWED VALUES
-  tomorrow                   Push calendar date +1 day, keep local time-of-day
-  next-monday                Next Monday (if already Monday, jump a week)
+  tomorrow                   Tomorrow (relative to today), keep local time-of-day
+  next-monday                Next Monday after today (if today is Monday, jump a week)
   <RFC3339>                  Absolute instant, e.g. 2026-07-21T15:00:00Z
   YYYY-MM-DDTHH:MM[:SS]      Absolute local datetime
   YYYY-MM-DD                 Absolute local date at noon
@@ -237,8 +236,8 @@ EXAMPLES
   jade tasks update --id <uuid> --due 2026-08-01T12:00
 
 NOTES
-  Presets use the existing due_at as the baseline (not \"now\"), matching
-  jade-core reschedule helpers.
+  Presets are absolute relative to today (idempotent), matching desktop
+  reschedule / quick-select behavior. Time-of-day comes from the current due_at.
 
 COMMON ERRORS
   invalid due date …         Unrecognized format
