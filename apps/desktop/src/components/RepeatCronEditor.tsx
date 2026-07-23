@@ -159,15 +159,16 @@ export function RepeatCronEditor({
       {frequency === "weekly" && !rawAuthoritative && (
         <div className="grid gap-1.5">
           <Label>Days of week</Label>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Days of week">
             {WEEKDAYS.map((day) => {
               const active = weekdays.includes(day.value);
               return (
                 <button
                   key={day.value}
                   type="button"
+                  aria-pressed={active}
                   className={cn(
-                    "rounded-md px-2 py-1 text-xs",
+                    "rounded-md px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     active
                       ? "bg-primary text-primary-foreground"
                       : "border border-border text-muted-foreground hover:bg-accent",
