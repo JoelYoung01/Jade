@@ -17,6 +17,7 @@ export function useFlipLayout(
 ): void {
   const prevRectsRef = useRef(new Map<string, DOMRect>());
   const prevKeyRef = useRef<string | null>(null);
+  const prevEnabledRef = useRef(enabled);
   const overflowTimerRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
@@ -33,10 +34,14 @@ export function useFlipLayout(
     }
 
     const keyChanged = prevKeyRef.current !== null && prevKeyRef.current !== layoutKey;
+    // Skip the frame where FLIP is re-enabled after a drag: layout often updates
+    // in the same commit, and animating from the pre-drag rect looks like the
+    // card flies back to its old lane instead of settling where it was dropped.
+    const justReenabled = enabled && !prevEnabledRef.current;
     const reduceMotion =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const shouldAnimate = enabled && keyChanged && !reduceMotion;
+    const shouldAnimate = enabled && keyChanged && !justReenabled && !reduceMotion;
 
     if (shouldAnimate) {
       let needsOverflowEscape = false;
@@ -97,5 +102,6 @@ export function useFlipLayout(
 
     prevRectsRef.current = nextRects;
     prevKeyRef.current = layoutKey;
+    prevEnabledRef.current = enabled;
   }, [containerRef, layoutKey, enabled]);
 }
