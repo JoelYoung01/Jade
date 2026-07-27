@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { TaskCard, type ReschedulePreset } from "@/components/TaskCard";
-import type { Task, TaskStatus } from "@/lib/types";
+import type { Task, TaskMotion, TaskStatus } from "@/lib/types";
 import {
   type DateRangePreset,
   matchesDueDateRange,
@@ -25,7 +25,9 @@ type LaneProps = {
   tasks: Task[];
   now: Date;
   selectedIds: ReadonlySet<string>;
+  draggingIds: ReadonlySet<string>;
   selectedTasks: Task[];
+  motionById?: ReadonlyMap<string, TaskMotion> | undefined;
   onToggleSelect: (id: string) => void;
   onClearSelection: () => void;
   onPrepareContextSelection: (id: string) => void;
@@ -41,7 +43,9 @@ function Lane({
   tasks,
   now,
   selectedIds,
+  draggingIds,
   selectedTasks,
+  motionById,
   onToggleSelect,
   onClearSelection,
   onPrepareContextSelection,
@@ -86,6 +90,8 @@ function Lane({
               task={task}
               now={now}
               selected={selectedIds.has(task.id)}
+              dragging={draggingIds.has(task.id)}
+              motion={motionById?.get(task.id)}
               selectedTasks={selectedTasks}
               onToggleSelect={onToggleSelect}
               onClearSelection={onClearSelection}
@@ -109,7 +115,9 @@ type TaskBoardProps = {
   visible: Record<TaskStatus, boolean>;
   /** When false, skip FLIP (e.g. while a card is being dragged). */
   animateLayout?: boolean;
+  motionById?: ReadonlyMap<string, TaskMotion> | undefined;
   selectedIds: ReadonlySet<string>;
+  draggingIds: ReadonlySet<string>;
   onToggleSelect: (id: string) => void;
   onClearSelection: () => void;
   onPrepareContextSelection: (id: string) => void;
@@ -167,7 +175,9 @@ export function TaskBoard({
   now,
   visible,
   animateLayout = true,
+  motionById,
   selectedIds,
+  draggingIds,
   onToggleSelect,
   onClearSelection,
   onPrepareContextSelection,
@@ -183,9 +193,35 @@ export function TaskBoard({
   const [customFrom, setCustomFrom] = React.useState(() => toDateInputValue(new Date()));
   const [customTo, setCustomTo] = React.useState(() => toDateInputValue(new Date()));
   const lanesRef = React.useRef<HTMLDivElement>(null);
+  const filterInputRef = React.useRef<HTMLInputElement>(null);
 
   const selectClassName =
     "h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  React.useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "f") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (inField && target !== filterInputRef.current) return;
+
+      event.preventDefault();
+      const input = filterInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.select();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const filtered = tasks.filter((task) =>
     matchesFilters(task, { textQuery, datePreset, customFrom, customTo, now }),
@@ -243,6 +279,7 @@ export function TaskBoard({
         <div className="relative min-w-40 flex-1 basis-40">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={filterInputRef}
             value={textQuery}
             onChange={(e) => setTextQuery(e.target.value)}
             placeholder="Filter tasks…"
@@ -325,7 +362,9 @@ export function TaskBoard({
               tasks={tasksByLane[status]}
               now={now}
               selectedIds={selectedIds}
+              draggingIds={draggingIds}
               selectedTasks={selectedTasks}
+              motionById={motionById}
               onToggleSelect={onToggleSelect}
               onClearSelection={onClearSelection}
               onPrepareContextSelection={onPrepareContextSelection}

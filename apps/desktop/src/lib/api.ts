@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { nextOccurrences, validateCron } from "@/lib/repeat";
 import { applyDuePreset, type DueQuickPreset } from "@/lib/time";
@@ -10,9 +11,12 @@ import type {
   StatusUpdateResult,
   Tag,
   Task,
+  TaskEvent,
   TaskStatus,
   UpdateTaskInput,
 } from "@/lib/types";
+
+export const DB_CHANGED_EVENT = "db-changed";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -253,4 +257,29 @@ export async function apiSetLaneVisibility(visibility: LaneVisibility): Promise<
     return structuredClone(mockStore.settings);
   }
   return invoke<Settings>("set_lane_visibility_cmd", { visibility });
+}
+
+export async function apiListTaskEventsSince(
+  afterSeq: number,
+  limit?: number,
+): Promise<TaskEvent[]> {
+  if (!isTauri()) return [];
+  return invoke<TaskEvent[]>("list_task_events_since_cmd", {
+    args: { after_seq: afterSeq, limit: limit ?? null },
+  });
+}
+
+export async function apiLatestEventSeq(): Promise<number> {
+  if (!isTauri()) return 0;
+  return invoke<number>("latest_event_seq_cmd");
+}
+
+/** Subscribe to SQLite change notifications from the Tauri host. */
+export async function apiSubscribeDbChanged(
+  onChanged: () => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen(DB_CHANGED_EVENT, () => {
+    onChanged();
+  });
 }

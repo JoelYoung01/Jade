@@ -21,6 +21,21 @@ export type Task = {
   tags: Tag[];
 };
 
+export type TaskEventType = "created" | "updated" | "deleted";
+
+export type TaskEvent = {
+  seq: number;
+  id: string;
+  task_id: string;
+  event_type: TaskEventType;
+  payload: unknown;
+  origin: string;
+  created_at: string;
+};
+
+/** Card motion driven by live sync (CLI / peers / local refresh). */
+export type TaskMotion = "enter" | "exit" | "flash";
+
 export type StatusUpdateResult = {
   task: Task;
   spawned: Task | null;

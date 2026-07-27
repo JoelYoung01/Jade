@@ -5,15 +5,15 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragCancelEvent,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { TriangleAlert } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { TaskBoard } from "@/components/TaskBoard";
-import type { ReschedulePreset } from "@/components/TaskCard";
+import { TaskDragPreview, type ReschedulePreset } from "@/components/TaskCard";
 import { ShortcutKeys } from "@/components/ui/kbd";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -30,10 +30,9 @@ import {
   apiUpdateTaskStatus,
 } from "@/lib/api";
 import type { LaneVisibility, Tag, Task, TaskFormValues, TaskStatus } from "@/lib/types";
-import { formatDue, isOverdue } from "@/lib/time";
 import { recentTagNames } from "@/lib/tags";
+import { useLiveTaskSync } from "@/lib/useLiveTaskSync";
 import { useNow } from "@/lib/useNow";
-import { cn } from "@/lib/utils";
 
 const STATUS_LANES: TaskStatus[] = ["inactive", "active", "complete"];
 
@@ -55,6 +54,10 @@ export default function App(): React.JSX.Element {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [draggingIds, setDraggingIds] = React.useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const draggingIdsRef = React.useRef<ReadonlySet<string>>(new Set());
   const [selectedIds, setSelectedIds] = React.useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -76,11 +79,26 @@ export default function App(): React.JSX.Element {
     setVisibility(settings.lane_visibility);
   }, []);
 
+  const onSyncError = React.useCallback((message: string) => {
+    setError(message);
+  }, []);
+
+  const { displayTasks, motionById, markSynced } = useLiveTaskSync({
+    tasks,
+    refresh,
+    onError: onSyncError,
+  });
+
+  const refreshAndAck = React.useCallback(async () => {
+    await refresh();
+    await markSynced();
+  }, [refresh, markSynced]);
+
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        await refresh();
+        await refreshAndAck();
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
@@ -92,7 +110,7 @@ export default function App(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refreshAndAck]);
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -126,7 +144,7 @@ export default function App(): React.JSX.Element {
       tag_names: input.tag_names,
       repeat_cron: input.repeat_cron ?? null,
     });
-    await refresh();
+    await refreshAndAck();
   }
 
   async function handleUpdate(input: TaskFormValues): Promise<void> {
@@ -139,7 +157,7 @@ export default function App(): React.JSX.Element {
       tag_names: input.tag_names,
       repeat_cron: input.repeat_cron ?? null,
     });
-    await refresh();
+    await refreshAndAck();
   }
 
   function openCreate(): void {
@@ -165,7 +183,7 @@ export default function App(): React.JSX.Element {
       setVisibility(settings.lane_visibility);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      await refresh();
+      await refreshAndAck();
     }
   }
 
@@ -197,9 +215,10 @@ export default function App(): React.JSX.Element {
       const updated = await Promise.all(unique.map((id) => apiRescheduleTask(id, mode)));
       const byId = new Map(updated.map((task) => [task.id, task]));
       setTasks((prev) => prev.map((t) => byId.get(t.id) ?? t));
+      await markSynced();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      await refresh();
+      await refreshAndAck();
     }
   }
 
@@ -212,9 +231,10 @@ export default function App(): React.JSX.Element {
       );
       const byId = new Map(updated.map((task) => [task.id, task]));
       setTasks((prev) => prev.map((t) => byId.get(t.id) ?? t));
+      await markSynced();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      await refresh();
+      await refreshAndAck();
     }
   }
 
@@ -224,7 +244,7 @@ export default function App(): React.JSX.Element {
     try {
       await Promise.all(unique.map((id) => apiDeleteTask(id)));
       setSelectedIds(new Set());
-      await refresh();
+      await refreshAndAck();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -256,39 +276,63 @@ export default function App(): React.JSX.Element {
         return next;
       });
       setSelectedIds(new Set());
-      await refresh();
+      await refreshAndAck();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      await refresh();
+      await refreshAndAck();
     }
   }
 
   function onDragStart(event: DragStartEvent): void {
-    setActiveId(String(event.active.id));
+    const id = String(event.active.id);
+    setActiveId(id);
+    // Dragging a selected card moves the whole selection; otherwise just that card.
+    const ids =
+      selectedIds.has(id) && selectedIds.size > 1
+        ? new Set(selectedIds)
+        : new Set([id]);
+    draggingIdsRef.current = ids;
+    setDraggingIds(ids);
+  }
+
+  function clearDragState(): void {
+    draggingIdsRef.current = new Set();
+    setActiveId(null);
+    setDraggingIds(new Set());
+  }
+
+  function onDragCancel(_event: DragCancelEvent): void {
+    clearDragState();
   }
 
   async function onDragEnd(event: DragEndEvent): Promise<void> {
-    setActiveId(null);
+    const ids = [...draggingIdsRef.current];
+    clearDragState();
+
     const overId = event.over?.id;
-    if (!overId) return;
+    if (!overId || ids.length === 0) return;
     const status = String(overId);
     if (!isStatus(status)) return;
 
-    const taskId = String(event.active.id);
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.status === status) return;
-
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
-    try {
-      await apiUpdateTaskStatus(taskId, status);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      await refresh();
-    }
+    await handleUpdateStatus(ids, status);
   }
 
-  const activeTask = activeId ? tasks.find((t) => t.id === activeId) : undefined;
+  const dragTasks = React.useMemo(() => {
+    if (draggingIds.size === 0) return [];
+    const byId = new Map(displayTasks.map((task) => [task.id, task]));
+    const ordered: Task[] = [];
+    // Prefer the grabbed card first in the overlay stack.
+    if (activeId) {
+      const active = byId.get(activeId);
+      if (active) ordered.push(active);
+    }
+    for (const id of draggingIds) {
+      if (id === activeId) continue;
+      const task = byId.get(id);
+      if (task) ordered.push(task);
+    }
+    return ordered;
+  }, [displayTasks, draggingIds, activeId]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -309,14 +353,21 @@ export default function App(): React.JSX.Element {
         {loading ? (
           <p className="px-4 py-16 text-center text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={(e) => void onDragEnd(e)}>
+          <DndContext
+            sensors={sensors}
+            onDragStart={onDragStart}
+            onDragCancel={onDragCancel}
+            onDragEnd={(e) => void onDragEnd(e)}
+          >
             <div className="flex min-h-0 flex-1 flex-col">
               <TaskBoard
-                tasks={tasks}
+                tasks={displayTasks}
                 now={now}
                 visible={visibility}
                 animateLayout={activeId === null}
+                motionById={motionById}
                 selectedIds={selectedIds}
+                draggingIds={draggingIds}
                 onToggleSelect={toggleSelect}
                 onClearSelection={clearSelection}
                 onPrepareContextSelection={prepareContextSelection}
@@ -329,29 +380,14 @@ export default function App(): React.JSX.Element {
               />
             </div>
             <DragOverlay dropAnimation={null}>
-              {activeTask ? (
-                <div className="rounded-md border border-primary/40 bg-card px-3 py-2.5 shadow-xl">
-                  <p className="text-sm font-medium">{activeTask.title}</p>
-                  <p
-                    className={cn(
-                      "mt-1 flex items-center gap-1 text-xs",
-                      activeTask.status !== "complete" && isOverdue(activeTask.due_at, now)
-                        ? "font-medium text-red-400"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {activeTask.status !== "complete" && isOverdue(activeTask.due_at, now) ? (
-                      <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-                    ) : null}
-                    <span>{formatDue(activeTask.due_at, now)}</span>
-                  </p>
-                </div>
+              {dragTasks.length > 0 ? (
+                <TaskDragPreview tasks={dragTasks} now={now} />
               ) : null}
             </DragOverlay>
           </DndContext>
         )}
 
-        {!loading && tasks.length === 0 && !error && (
+        {!loading && displayTasks.length === 0 && !error && (
           <p className="pointer-events-none fixed inset-x-0 bottom-10 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
             <span>No tasks yet — press</span>
             <ShortcutKeys keys={["Ctrl", "N"]} />
@@ -370,7 +406,7 @@ export default function App(): React.JSX.Element {
         onCountTagUsage={apiCountTasksWithTag}
         onDeleteTag={async (tagId) => {
           await apiDeleteTag(tagId);
-          await refresh();
+          await refreshAndAck();
         }}
       />
     </TooltipProvider>

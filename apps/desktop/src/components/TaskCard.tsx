@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { Repeat, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ import {
 import { TagLabel } from "@/components/TagLabel";
 import { describeCron } from "@/lib/repeat";
 import { parseTagParts } from "@/lib/tags";
-import type { RescheduleMode, Task, TaskStatus } from "@/lib/types";
+import type { RescheduleMode, Task, TaskMotion, TaskStatus } from "@/lib/types";
 import {
   formatDue,
   isOverdue,
@@ -75,6 +74,10 @@ type TaskCardProps = {
   task: Task;
   now: Date;
   selected: boolean;
+  /** True while this card is part of the active multi/single drag. */
+  dragging: boolean;
+  /** Live-sync enter / exit / flash motion. */
+  motion?: TaskMotion | undefined;
   selectedTasks: Task[];
   onToggleSelect: (id: string) => void;
   onClearSelection: () => void;
@@ -86,10 +89,90 @@ type TaskCardProps = {
   onDelete: (ids: string[]) => void;
 };
 
+const DRAG_STACK_LIMIT = 3;
+
+/** Floating preview shown under the pointer while dragging one or more tasks. */
+export function TaskDragPreview({
+  tasks,
+  now,
+}: {
+  tasks: Task[];
+  now: Date;
+}): React.JSX.Element | null {
+  if (tasks.length === 0) return null;
+
+  const visible = tasks.slice(0, DRAG_STACK_LIMIT);
+  const extra = tasks.length - visible.length;
+
+  return (
+    <div className="relative w-[min(100vw-2rem,18rem)]">
+      {/* Back-to-front so the grabbed card sits on top of the stack. */}
+      {[...visible].reverse().map((task, reverseIndex) => {
+        const index = visible.length - 1 - reverseIndex;
+        const overdue = task.status !== "complete" && isOverdue(task.due_at, now);
+        const isFront = index === 0;
+        return (
+          <div
+            key={task.id}
+            className={cn(
+              "rounded-md border border-primary/40 bg-card px-3 py-2.5 shadow-xl",
+              !isFront && "pointer-events-none absolute inset-x-0 top-0",
+            )}
+            style={
+              isFront
+                ? { position: "relative", zIndex: visible.length }
+                : {
+                    transform: `translate(${index * 6}px, ${index * 6}px)`,
+                    zIndex: visible.length - index,
+                    opacity: Math.max(0.55, 1 - index * 0.15),
+                  }
+            }
+          >
+            {isFront ? (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium leading-snug">{task.title}</p>
+                  {tasks.length > 1 ? (
+                    <span className="shrink-0 rounded-md bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground tabular-nums">
+                      {tasks.length}
+                    </span>
+                  ) : null}
+                </div>
+                <p
+                  className={cn(
+                    "mt-1 flex items-center gap-1 text-xs",
+                    overdue ? "font-medium text-red-400" : "text-muted-foreground",
+                  )}
+                >
+                  {overdue ? (
+                    <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+                  ) : null}
+                  <span>{formatDue(task.due_at, now)}</span>
+                </p>
+                {extra > 0 ? (
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    +{extra} more
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="truncate text-sm font-medium text-muted-foreground">
+                {task.title}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TaskCard({
   task,
   now,
   selected,
+  dragging,
+  motion,
   selectedTasks,
   onToggleSelect,
   onClearSelection,
@@ -100,7 +183,7 @@ export function TaskCard({
   onRescheduleCustom,
   onDelete,
 }: TaskCardProps): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef } = useDraggable({
     id: task.id,
     data: { status: task.status },
   });
@@ -113,8 +196,8 @@ export function TaskCard({
   const confirmDeleteRef = React.useRef<HTMLButtonElement>(null);
 
   const style: React.CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.55 : 1,
+    // DragOverlay carries the pointer preview; lane cards stay put as ghosts.
+    opacity: dragging ? 0.4 : 1,
   };
 
   const targetIds = menuTargets.map((t) => t.id);
@@ -141,7 +224,14 @@ export function TaskCard({
         }}
       >
         <ContextMenuTrigger asChild>
-          <div data-flip-id={task.id} className="w-full shrink-0 will-change-transform">
+          <div
+            data-flip-id={task.id}
+            className={cn(
+              "w-full shrink-0 will-change-transform",
+              motion === "enter" && "jade-card-enter",
+              motion === "exit" && "jade-card-exit",
+            )}
+          >
             <article
               ref={setNodeRef}
               style={style}
@@ -149,7 +239,8 @@ export function TaskCard({
               className={cn(
                 "cursor-grab rounded-md border border-transparent bg-card/70 px-3 py-2.5 transition-colors hover:border-border active:cursor-grabbing",
                 selected && "border-primary/50 bg-primary/10 ring-1 ring-primary/35",
-                isDragging && "shadow-lg ring-1 ring-primary/40",
+                dragging && "shadow-lg ring-1 ring-primary/40",
+                motion === "flash" && "jade-card-flash",
               )}
               onClick={(event) => {
                 if (event.ctrlKey || event.metaKey) {
