@@ -10,11 +10,12 @@ use clap::{Args, Subcommand};
 use uuid::Uuid;
 
 use crate::db::open_cli_db;
+use crate::output::ListFormat;
 
 #[derive(Debug, Subcommand)]
 pub enum TasksCommand {
     /// List non-deleted tasks ordered by due date
-    List,
+    List(ListArgs),
     /// Create a new task
     Add(AddArgs),
     /// Partially update an existing task
@@ -23,6 +24,13 @@ pub enum TasksCommand {
     Delete(DeleteArgs),
     /// Show the task event log (newest first)
     History(HistoryArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// Output format: plain (default), csv, or json
+    #[arg(long, value_enum, default_value_t = ListFormat::Plain)]
+    pub format: ListFormat,
 }
 
 #[derive(Debug, Args)]
@@ -100,7 +108,15 @@ pub struct Globals {
 pub fn run(command: TasksCommand, globals: &Globals) -> anyhow::Result<()> {
     let db = open_cli_db(globals.db.clone())?;
     match command {
-        TasksCommand::List => list::run(&db, globals.json),
+        TasksCommand::List(args) => {
+            // Global --json still forces JSON when --format is left at its default.
+            let format = if globals.json && args.format == ListFormat::Plain {
+                ListFormat::Json
+            } else {
+                args.format
+            };
+            list::run(&db, format)
+        }
         TasksCommand::Add(args) => add::run(&db, args, globals.json),
         TasksCommand::Update(args) => update::run(&db, args, globals.json),
         TasksCommand::Delete(args) => delete::run(&db, args, globals.json),

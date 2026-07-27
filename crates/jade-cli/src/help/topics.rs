@@ -88,22 +88,27 @@ PURPOSE
   Print all non-deleted tasks ordered by due_at ascending.
 
 USAGE
-  jade tasks list [--json] [--db <path>]
+  jade tasks list [--format <plain|csv|json>] [--db <path>]
 
 OPTIONS
-  --json        Pretty-printed JSON array of tasks
-  --db <path>   Override database path
+  --format <plain|csv|json>   Output format (default: plain)
+  --json                      Same as --format json (global flag)
+  --db <path>                 Override database path
 
-OUTPUT (default)
-  Table columns: ID, STATUS, DUE, TITLE, TAGS
+OUTPUT
+  plain   Table columns: ID, STATUS, DUE, TITLE, REPEAT, TAGS
+  csv     Header + rows: id,status,due_at,title,description,repeat_cron,tags
+          (tags joined with ';')
+  json    Pretty-printed JSON array of tasks
 
 EXAMPLES
   jade tasks list
-  jade tasks list --json
+  jade tasks list --format csv
+  jade tasks list --format json
   jade tasks list --db ./tmp/jade.db
 
 COMMON ERRORS
-  (none typical) — empty DB prints \"(no tasks)\"
+  (none typical) — empty DB prints \"(no tasks)\" in plain mode
 ";
 
 const TASKS_ADD: &str = "\
@@ -330,4 +335,7 @@ EXAMPLES
 NOTES
   Events are written for creates, updates (including status / due / tags /
   repeat), deletes, and recurring spawn creates (payload includes spawned_from).
+  Each event has a monotonic seq (replication cursor), an origin (default
+  local), and a full task snapshot under payload.task for sync/UI apply.
+  Updated events nest field diffs under payload.changes.
 ";

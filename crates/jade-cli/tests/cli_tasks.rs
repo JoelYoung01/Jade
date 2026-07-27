@@ -101,6 +101,70 @@ fn crud_round_trip() {
 }
 
 #[test]
+fn list_format_plain_csv_json() {
+    let (_dir, db) = temp_db();
+
+    jade()
+        .args([
+            "--db",
+            &db,
+            "tasks",
+            "add",
+            "Format me",
+            "--due",
+            "2026-07-22T09:00:00Z",
+            "--tag",
+            "errands",
+            "-d",
+            "needs milk",
+        ])
+        .assert()
+        .success();
+
+    jade()
+        .args(["--db", &db, "tasks", "list", "--format", "plain"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Format me"))
+        .stdout(predicate::str::contains("STATUS"));
+
+    let csv = jade()
+        .args(["--db", &db, "tasks", "list", "--format", "csv"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with(
+            "id,status,due_at,title,description,repeat_cron,tags",
+        ))
+        .stdout(predicate::str::contains("Format me"))
+        .stdout(predicate::str::contains("needs milk"))
+        .stdout(predicate::str::contains("errands"))
+        .get_output()
+        .stdout
+        .clone();
+    let csv_text = String::from_utf8(csv).expect("utf8");
+    assert_eq!(csv_text.lines().count(), 2);
+
+    let json = jade()
+        .args(["--db", &db, "tasks", "list", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let tasks: serde_json::Value = serde_json::from_slice(&json).expect("list json");
+    let arr = tasks.as_array().expect("array");
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["title"], "Format me");
+
+    // Global --json still works as a shorthand for list JSON output.
+    jade()
+        .args(["--db", &db, "--json", "tasks", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"title\": \"Format me\""));
+}
+
+#[test]
 fn history_shows_create_and_update() {
     let (_dir, db) = temp_db();
 
