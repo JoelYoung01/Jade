@@ -49,6 +49,7 @@ fn summarize_payload(event_type: TaskEventType, payload: &Value) -> String {
         TaskEventType::Created => {
             let title = payload
                 .get("title")
+                .or_else(|| payload.pointer("/task/title"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("(untitled)");
             if let Some(from) = payload.get("spawned_from").and_then(|v| v.as_str()) {
@@ -57,13 +58,33 @@ fn summarize_payload(event_type: TaskEventType, payload: &Value) -> String {
                 format!("created \"{title}\"")
             }
         }
-        TaskEventType::Deleted => "deleted".to_owned(),
+        TaskEventType::Deleted => {
+            if let Some(title) = payload.pointer("/task/title").and_then(|v| v.as_str()) {
+                format!("deleted \"{title}\"")
+            } else {
+                "deleted".to_owned()
+            }
+        }
         TaskEventType::Updated => {
-            let Some(obj) = payload.as_object() else {
+            // Prefer nested `changes` (sync envelope); fall back to flat field map.
+            let changes = payload
+                .get("changes")
+                .and_then(|v| v.as_object())
+                .or_else(|| payload.as_object());
+            let Some(obj) = changes else {
                 return payload.to_string();
             };
             let mut parts = Vec::new();
             for (field, change) in obj {
+                if field == "task" || field == "changes" {
+                    continue;
+                }
+                let Some(change_obj) = change.as_object() else {
+                    continue;
+                };
+                if !change_obj.contains_key("old") && !change_obj.contains_key("new") {
+                    continue;
+                }
                 let old = format_value(change.get("old"));
                 let new = format_value(change.get("new"));
                 parts.push(format!("{field}: {old} -> {new}"));

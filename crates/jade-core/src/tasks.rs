@@ -6,7 +6,9 @@ use uuid::Uuid;
 use crate::cron::{next_occurrence, normalize_cron};
 use crate::db::Db;
 use crate::error::{Error, Result};
-use crate::events::{created_payload, field_change, insert_event, updated_payload};
+use crate::events::{
+    created_payload, deleted_payload, field_change, insert_event, updated_payload,
+};
 use crate::models::{
     CreateTaskInput, DueUpdate, RepeatCronUpdate, RescheduleMode, StatusUpdateResult, Tag, Task,
     TaskEventType, TaskStatus, UpdateTaskInput, UpdateTaskStatusInput,
@@ -85,30 +87,34 @@ pub fn create_task(db: &Db, input: CreateTaskInput) -> Result<Task> {
             ],
         )?;
 
-        let mut tag_names = Vec::new();
+        let mut tags = Vec::new();
         for name in &input.tag_names {
             let tag = ensure_tag_in_tx(&tx, name)?;
             tx.execute(
                 "INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?1, ?2)",
                 params![id.to_string(), tag.id.to_string()],
             )?;
-            tag_names.push(tag.name);
+            tags.push(tag);
         }
-        tag_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
+        let snapshot = Task {
+            id,
+            title: title.clone(),
+            description: description.clone(),
+            status: TaskStatus::Inactive,
+            due_at: input.due_at,
+            repeat_cron: repeat_cron.clone(),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            tags,
+        };
         insert_event(
             &tx,
             id,
             TaskEventType::Created,
-            created_payload(
-                &title,
-                description.as_deref(),
-                TaskStatus::Inactive,
-                input.due_at,
-                repeat_cron.as_deref(),
-                &tag_names,
-                None,
-            ),
+            created_payload(&snapshot, None),
             now,
         )?;
 
@@ -184,7 +190,17 @@ pub fn update_task_status(db: &Db, input: UpdateTaskStatusInput) -> Result<Statu
                     field_change(json!(current.repeat_cron), Value::Null),
                 );
             }
-            if let Some(payload) = updated_payload(changes) {
+            let after = Task {
+                status: input.status,
+                repeat_cron: if clear_cron {
+                    None
+                } else {
+                    current.repeat_cron.clone()
+                },
+                updated_at: now,
+                ..current.clone()
+            };
+            if let Some(payload) = updated_payload(changes, &after) {
                 insert_event(&tx, input.id, TaskEventType::Updated, payload, now)?;
             }
         }
@@ -239,7 +255,12 @@ pub fn reschedule_task(
                     json!(new_due.to_rfc3339()),
                 ),
             );
-            if let Some(payload) = updated_payload(changes) {
+            let after = Task {
+                due_at: new_due,
+                updated_at: now,
+                ..current.clone()
+            };
+            if let Some(payload) = updated_payload(changes, &after) {
                 insert_event(&tx, id, TaskEventType::Updated, payload, now)?;
             }
         }
@@ -250,7 +271,12 @@ pub fn reschedule_task(
 }
 
 pub fn delete_task(db: &Db, id: Uuid) -> Result<()> {
+    let current = get_task(db, id)?;
     let now = Utc::now();
+    let mut tombstone = current.clone();
+    tombstone.deleted_at = Some(now);
+    tombstone.updated_at = now;
+
     let conn = db.connection();
     let tx = conn.unchecked_transaction()?;
     let updated = tx.execute(
@@ -268,7 +294,7 @@ pub fn delete_task(db: &Db, id: Uuid) -> Result<()> {
         &tx,
         id,
         TaskEventType::Deleted,
-        json!({}),
+        deleted_payload(&tombstone),
         now,
     )?;
     tx.commit()?;
@@ -450,6 +476,7 @@ fn write_task_update(
         return Err(Error::TaskNotFound(id.to_string()));
     }
 
+    let mut after_tags = current.tags.clone();
     let mut new_tag_names: Option<Vec<String>> = None;
     if let Some(tag_names) = tag_names {
         tx.execute(
@@ -457,19 +484,37 @@ fn write_task_update(
             params![id.to_string()],
         )?;
         let mut names = Vec::new();
+        let mut tags = Vec::new();
         for name in tag_names {
             let tag = ensure_tag_in_tx(&tx, name)?;
             tx.execute(
                 "INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?1, ?2)",
                 params![id.to_string(), tag.id.to_string()],
             )?;
-            names.push(tag.name);
+            names.push(tag.name.clone());
+            tags.push(tag);
         }
         names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
         new_tag_names = Some(names);
+        after_tags = tags;
     }
 
-    if let Some(payload) = diff_task_update(current, resolved, stored_cron.as_deref(), new_tag_names.as_deref())
+    let after = Task {
+        id,
+        title: resolved.title.clone(),
+        description: resolved.description.clone(),
+        status: resolved.status,
+        due_at: resolved.due_at,
+        repeat_cron: stored_cron.clone(),
+        created_at: current.created_at,
+        updated_at: now,
+        deleted_at: None,
+        tags: after_tags,
+    };
+
+    if let Some(payload) =
+        diff_task_update(current, resolved, stored_cron.as_deref(), new_tag_names.as_deref(), &after)
     {
         insert_event(&tx, id, TaskEventType::Updated, payload, now)?;
     }
@@ -483,6 +528,7 @@ fn diff_task_update(
     resolved: &ResolvedUpdate,
     stored_cron: Option<&str>,
     new_tag_names: Option<&[String]>,
+    after: &Task,
 ) -> Option<Value> {
     let mut changes = Map::new();
 
@@ -532,7 +578,7 @@ fn diff_task_update(
         }
     }
 
-    updated_payload(changes)
+    updated_payload(changes, after)
 }
 
 /// If `task` has a repeat cron, insert the next occurrence (inactive) with the
@@ -577,29 +623,32 @@ fn spawn_next_if_recurring(
             ],
         )?;
 
-        let mut tag_names = Vec::new();
-        for tag in &task.tags {
+        let mut tags = task.tags.clone();
+        for tag in &tags {
             tx.execute(
                 "INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?1, ?2)",
                 params![new_id.to_string(), tag.id.to_string()],
             )?;
-            tag_names.push(tag.name.clone());
         }
-        tag_names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+        tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
+        let snapshot = Task {
+            id: new_id,
+            title: task.title.clone(),
+            description: task.description.clone(),
+            status: TaskStatus::Inactive,
+            due_at: next_due,
+            repeat_cron: Some(cron.to_owned()),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            tags,
+        };
         insert_event(
             &tx,
             new_id,
             TaskEventType::Created,
-            created_payload(
-                &task.title,
-                task.description.as_deref(),
-                TaskStatus::Inactive,
-                next_due,
-                Some(cron),
-                &tag_names,
-                Some(task.id),
-            ),
+            created_payload(&snapshot, Some(task.id)),
             now,
         )?;
 

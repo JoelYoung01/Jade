@@ -55,6 +55,13 @@ pub fn open_db(path: impl AsRef<Path>) -> Result<Db> {
     })
 }
 
+/// SQLite `PRAGMA data_version` — bumps when any connection modifies the DB.
+pub fn data_version(db: &Db) -> Result<i64> {
+    let conn = db.connection();
+    let version: i64 = conn.query_row("PRAGMA data_version", [], |row| row.get(0))?;
+    Ok(version)
+}
+
 /// Open an in-memory database (for tests).
 #[cfg(test)]
 pub fn open_memory() -> Result<Db> {
@@ -75,6 +82,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/001_init.sql"),
     include_str!("../migrations/002_add_repeat_cron.sql"),
     include_str!("../migrations/003_task_events.sql"),
+    include_str!("../migrations/004_task_events_seq_origin.sql"),
 ];
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -126,7 +134,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         let count: i64 = conn
             .query_row(

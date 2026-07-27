@@ -87,21 +87,37 @@ impl TaskEventType {
     }
 }
 
+/// Default origin stamped on events written by this node.
+pub const EVENT_ORIGIN_LOCAL: &str = "local";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskEvent {
+    /// Monotonic local sequence (replication cursor).
+    pub seq: i64,
     pub id: Uuid,
     pub task_id: Uuid,
     pub event_type: TaskEventType,
     pub payload: serde_json::Value,
+    /// Writer attribution (`local`, peer id, agent id, …).
+    pub origin: String,
     pub created_at: DateTime<Utc>,
 }
 
-/// Query filter for listing task events.
+/// Query filter for listing task events (newest first).
 #[derive(Debug, Clone, Default)]
 pub struct ListTaskEventsInput {
     /// When set, only events for this task. When `None`, all tasks.
     pub task_id: Option<Uuid>,
     /// Max rows to return (newest first). Defaults to 50 when `None`.
+    pub limit: Option<u32>,
+}
+
+/// Query filter for listing task events after a sequence cursor (oldest first).
+#[derive(Debug, Clone, Default)]
+pub struct ListTaskEventsSinceInput {
+    /// Return events with `seq > after_seq`. Use `0` (or omit) to read from the start.
+    pub after_seq: i64,
+    /// Max rows to return (oldest first). Defaults to 500 when `None`.
     pub limit: Option<u32>,
 }
 

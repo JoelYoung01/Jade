@@ -11,13 +11,13 @@ mod tasks;
 mod time_helpers;
 
 pub use cron::{next_occurrence, normalize_cron, parse_cron};
-pub use db::{default_db_path, open_db, open_default_db, Db, APP_DATA_DIR_NAME};
+pub use db::{data_version, default_db_path, open_db, open_default_db, Db, APP_DATA_DIR_NAME};
 pub use error::{Error, Result};
-pub use events::list_task_events;
+pub use events::{latest_event_seq, list_task_events, list_task_events_since};
 pub use models::{
-    CreateTaskInput, DueUpdate, LaneVisibility, ListTaskEventsInput, RepeatCronUpdate,
-    RescheduleMode, Settings, StatusUpdateResult, Tag, Task, TaskEvent, TaskEventType, TaskStatus,
-    UpdateTaskInput, UpdateTaskStatusInput,
+    CreateTaskInput, DueUpdate, EVENT_ORIGIN_LOCAL, LaneVisibility, ListTaskEventsInput,
+    ListTaskEventsSinceInput, RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult, Tag,
+    Task, TaskEvent, TaskEventType, TaskStatus, UpdateTaskInput, UpdateTaskStatusInput,
 };
 pub use settings::{get_settings, set_lane_visibility};
 pub use tags::{count_tasks_with_tag, delete_tag, ensure_tag, list_tags};
