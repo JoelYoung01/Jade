@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ShortcutKeys } from "@/components/ui/kbd";
 import {
   Tooltip,
   TooltipContent,
@@ -209,6 +210,13 @@ export function TaskCard({
     setDeleteOpen(false);
   }
 
+  function saveCustomReschedule(): void {
+    const date = new Date(customDue);
+    if (Number.isNaN(date.getTime())) return;
+    onRescheduleCustom(targetIds, date.toISOString());
+    setCustomOpen(false);
+  }
+
   const overdue = task.status !== "complete" && isOverdue(task.due_at, now);
   const repeatLabel = task.repeat_cron ? describeCron(task.repeat_cron) : null;
 
@@ -264,7 +272,7 @@ export function TaskCard({
                   // Keep dnd-kit from starting a drag on modifier-click select.
                   return;
                 }
-                listeners.onPointerDown?.(event);
+                listeners?.onPointerDown?.(event);
               }}
             >
               <div className="flex items-start justify-between gap-2">
@@ -312,7 +320,7 @@ export function TaskCard({
                         <TagLabel
                           name={tag.name}
                           flushKey={keyed}
-                          className={keyed ? "rounded" : undefined}
+                          {...(keyed ? { className: "rounded" } : {})}
                         />
                       </span>
                     );
@@ -435,7 +443,15 @@ export function TaskCard({
 
       {customOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-lg border border-border bg-popover p-4 shadow-xl">
+          <div
+            className="w-full max-w-sm rounded-lg border border-border bg-popover p-4 shadow-xl"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                saveCustomReschedule();
+              }
+            }}
+          >
             <h4 className="font-display text-sm font-semibold">Reschedule</h4>
             <p className="mt-1 text-xs text-muted-foreground">
               {multi
@@ -447,28 +463,16 @@ export function TaskCard({
               type="datetime-local"
               value={customDue}
               onChange={(e) => setCustomDue(e.target.value)}
+              autoFocus
             />
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
-                onClick={() => setCustomOpen(false)}
-              >
+              <Button type="button" variant="ghost" onClick={() => setCustomOpen(false)}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-                onClick={() => {
-                  const date = new Date(customDue);
-                  if (!Number.isNaN(date.getTime())) {
-                    onRescheduleCustom(targetIds, date.toISOString());
-                    setCustomOpen(false);
-                  }
-                }}
-              >
-                Save
-              </button>
+              </Button>
+              <Button type="button" className="gap-2" onClick={saveCustomReschedule}>
+                <span>Save</span>
+                <ShortcutKeys keys={["Ctrl", "↵"]} className="text-primary-foreground" />
+              </Button>
             </div>
           </div>
         </div>

@@ -136,11 +136,19 @@ function TagChip({
           onClick={onAdd}
           aria-label={`Add tag ${name}`}
         >
-          <TagLabel name={name} flushKey={keyed} className={keyed ? "rounded-md" : undefined} />
+          <TagLabel
+            name={name}
+            flushKey={keyed}
+            {...(keyed ? { className: "rounded-md" } : {})}
+          />
         </button>
       ) : (
         <>
-          <TagLabel name={name} flushKey={keyed} className={keyed ? "rounded-md" : undefined} />
+          <TagLabel
+            name={name}
+            flushKey={keyed}
+            {...(keyed ? { className: "rounded-md" } : {})}
+          />
           {onRemove && (
             <button
               type="button"

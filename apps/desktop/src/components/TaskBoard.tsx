@@ -23,6 +23,8 @@ const LANE_META: Record<TaskStatus, { title: string; hint: string }> = {
 type LaneProps = {
   status: TaskStatus;
   tasks: Task[];
+  /** Total tasks in this status before board filters are applied. */
+  unfilteredCount: number;
   now: Date;
   selectedIds: ReadonlySet<string>;
   draggingIds: ReadonlySet<string>;
@@ -41,6 +43,7 @@ type LaneProps = {
 function Lane({
   status,
   tasks,
+  unfilteredCount,
   now,
   selectedIds,
   draggingIds,
@@ -57,6 +60,8 @@ function Lane({
 }: LaneProps): React.JSX.Element {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const meta = LANE_META[status];
+  const emptyMessage =
+    unfilteredCount > 0 ? "No tasks match your filters" : "No tasks";
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
@@ -82,7 +87,9 @@ function Lane({
         }}
       >
         {tasks.length === 0 ? (
-          <p className="px-1 py-8 text-center text-xs text-muted-foreground/70">No tasks</p>
+          <p className="px-1 py-8 text-center text-xs text-muted-foreground/70">
+            {emptyMessage}
+          </p>
         ) : (
           tasks.map((task) => (
             <TaskCard
@@ -153,7 +160,7 @@ function matchesFilters(task: Task, filters: BoardFilters): boolean {
     const bounds = resolveDateRangeBounds(datePreset, customFrom, customTo, now);
     if (
       !matchesDueDateRange(task.due_at, bounds, {
-        now,
+        ...(now ? { now } : {}),
         isComplete: task.status === "complete",
       })
     ) {
@@ -243,6 +250,18 @@ export function TaskBoard({
     }
     return groups;
   }, [filtered]);
+
+  const unfilteredCountByLane = React.useMemo(() => {
+    const counts: Record<TaskStatus, number> = {
+      inactive: 0,
+      active: 0,
+      complete: 0,
+    };
+    for (const task of tasks) {
+      counts[task.status] += 1;
+    }
+    return counts;
+  }, [tasks]);
 
   const selectedTasks = React.useMemo(
     () => tasks.filter((task) => selectedIds.has(task.id)),
@@ -360,6 +379,7 @@ export function TaskBoard({
               key={status}
               status={status}
               tasks={tasksByLane[status]}
+              unfilteredCount={unfilteredCountByLane[status]}
               now={now}
               selectedIds={selectedIds}
               draggingIds={draggingIds}
