@@ -47,9 +47,102 @@ export type LaneVisibility = {
   complete: boolean;
 };
 
+export type SyncthingSettings = {
+  address: string;
+  api_key: string;
+};
+
 export type Settings = {
   lane_visibility: LaneVisibility;
+  syncthing: SyncthingSettings;
 };
+
+export type WikiRoot = {
+  id: string;
+  path: string;
+  label: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type WikiPage = {
+  id: string;
+  root_id: string;
+  rel_path: string;
+  content_hash: string;
+  mtime: string;
+  indexed_at: string;
+  missing_at: string | null;
+  title_cache: string | null;
+  tags_cache: string[];
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type WikiFrontMatter = {
+  id?: string | null;
+  title?: string | null;
+  tags?: string[];
+  summary?: string | null;
+  source?: string | null;
+};
+
+export type WikiPageContent = {
+  page: WikiPage;
+  absolute_path: string;
+  content: string;
+  front_matter: WikiFrontMatter | null;
+  body: string;
+};
+
+export type WikiBacklink = {
+  page: WikiPage;
+  target_raw: string;
+};
+
+export type WikiMatchKind =
+  | "body_exact"
+  | "title_exact"
+  | "tags_exact"
+  | "path_exact"
+  | "body_related"
+  | "title_related"
+  | "tags_related"
+  | "path_related"
+  | "recent";
+
+export type WikiSearchSnippet = {
+  before: string;
+  matched: string;
+  after: string;
+};
+
+export type WikiSearchHit = {
+  page: WikiPage;
+  kind: WikiMatchKind;
+  reason: string;
+  snippet: WikiSearchSnippet | null;
+  score: number;
+};
+
+export type SyncthingFolder = {
+  id: string;
+  label: string;
+  path: string;
+  paused: boolean;
+};
+
+export type SyncthingStatus = {
+  underSyncthing: boolean;
+  markerDetected: boolean;
+  folder: SyncthingFolder | null;
+  error: string | null;
+};
+
+export type AppView = "tasks" | "wiki";
 
 export type RescheduleMode =
   | "today"

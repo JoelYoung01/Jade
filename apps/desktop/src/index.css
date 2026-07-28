@@ -135,3 +135,140 @@
     animation: jade-card-flash 650ms ease-out;
   }
 }
+
+/* Wiki document render mode */
+.wiki-prose {
+  color: var(--color-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+.wiki-prose > :first-child {
+  margin-top: 0;
+}
+
+.wiki-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.wiki-prose h1,
+.wiki-prose h2,
+.wiki-prose h3,
+.wiki-prose h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+}
+
+.wiki-prose h1 {
+  font-size: 1.65rem;
+}
+
+.wiki-prose h2 {
+  font-size: 1.3rem;
+}
+
+.wiki-prose h3 {
+  font-size: 1.1rem;
+}
+
+.wiki-prose p,
+.wiki-prose ul,
+.wiki-prose ol,
+.wiki-prose blockquote,
+.wiki-prose pre {
+  margin: 0.75em 0;
+}
+
+.wiki-prose a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wiki-prose ul,
+.wiki-prose ol {
+  padding-left: 1.35rem;
+}
+
+.wiki-prose ul {
+  list-style: disc;
+}
+
+.wiki-prose ol {
+  list-style: decimal;
+}
+
+.wiki-prose li + li {
+  margin-top: 0.25em;
+}
+
+.wiki-prose blockquote {
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  padding-left: 0.9rem;
+}
+
+.wiki-prose code {
+  background: var(--color-secondary);
+  border-radius: 0.3rem;
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  font-size: 0.875em;
+  padding: 0.1em 0.35em;
+}
+
+.wiki-prose pre {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  padding: 0.85rem 1rem;
+}
+
+.wiki-prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.wiki-prose hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.5em 0;
+}
+
+.wiki-prose table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+}
+
+.wiki-prose th,
+.wiki-prose td {
+  border: 1px solid var(--color-border);
+  padding: 0.4rem 0.65rem;
+  text-align: left;
+}
+
+.wiki-prose th {
+  background: var(--color-secondary);
+  font-weight: 600;
+}
+
+.wiki-prose mark.wiki-search-hit {
+  background: oklch(0.72 0.12 165 / 0.35);
+  border-radius: 0.15em;
+  color: inherit;
+  padding: 0 0.12em;
+}
+
+.wiki-prose mark.wiki-search-hit-active {
+  background: oklch(0.78 0.14 165 / 0.55);
+  box-shadow: 0 0 0 1px oklch(0.72 0.12 165 / 0.65);
+}
+
+mark.wiki-search-snippet-hit {
+  background: oklch(0.72 0.12 165 / 0.35);
+  color: inherit;
+}

@@ -3,6 +3,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
   useSensor,
   useSensors,
   type DragCancelEvent,
@@ -14,6 +15,7 @@ import { AppShell } from "@/components/AppShell";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { TaskBoard } from "@/components/TaskBoard";
 import { TaskDragPreview, type ReschedulePreset } from "@/components/TaskCard";
+import { WikiView } from "@/components/WikiView";
 import { ShortcutKeys } from "@/components/ui/kbd";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -29,7 +31,15 @@ import {
   apiUpdateTask,
   apiUpdateTaskStatus,
 } from "@/lib/api";
-import type { LaneVisibility, Tag, Task, TaskFormValues, TaskStatus } from "@/lib/types";
+import { snapCenterToCursor } from "@/lib/dndModifiers";
+import type {
+  AppView,
+  LaneVisibility,
+  Tag,
+  Task,
+  TaskFormValues,
+  TaskStatus,
+} from "@/lib/types";
 import { recentTagNames } from "@/lib/tags";
 import { useLiveTaskSync } from "@/lib/useLiveTaskSync";
 import { useNow } from "@/lib/useNow";
@@ -42,6 +52,7 @@ function isStatus(value: string): value is TaskStatus {
 
 export default function App(): React.JSX.Element {
   const now = useNow();
+  const [view, setView] = React.useState<AppView>("tasks");
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [tags, setTags] = React.useState<Tag[]>([]);
   const [visibility, setVisibility] = React.useState<LaneVisibility>({
@@ -127,14 +138,14 @@ export default function App(): React.JSX.Element {
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
-        if (inField) return;
+        if (inField || view !== "tasks") return;
         event.preventDefault();
         openCreate();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedIds]);
+  }, [selectedIds, view]);
 
   async function handleCreate(input: TaskFormValues): Promise<void> {
     await apiCreateTask({
@@ -336,63 +347,76 @@ export default function App(): React.JSX.Element {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <AppShell onCreateTask={openCreate}>
-        {error && (
-          <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-            <button
-              type="button"
-              className="ml-3 underline"
-              onClick={() => setError(null)}
-            >
-              dismiss
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <p className="px-4 py-16 text-center text-sm text-muted-foreground">Loading…</p>
+      <AppShell view={view} onViewChange={setView} onCreateTask={openCreate}>
+        {view === "wiki" ? (
+          <WikiView />
         ) : (
-          <DndContext
-            sensors={sensors}
-            onDragStart={onDragStart}
-            onDragCancel={onDragCancel}
-            onDragEnd={(e) => void onDragEnd(e)}
-          >
-            <div className="flex min-h-0 flex-1 flex-col">
-              <TaskBoard
-                tasks={displayTasks}
-                now={now}
-                visible={visibility}
-                animateLayout={activeId === null}
-                motionById={motionById}
-                selectedIds={selectedIds}
-                draggingIds={draggingIds}
-                onToggleSelect={toggleSelect}
-                onClearSelection={clearSelection}
-                onPrepareContextSelection={prepareContextSelection}
-                onToggleLane={(status) => void handleToggleLane(status)}
-                onEdit={openEdit}
-                onUpdateStatus={(ids, status) => void handleUpdateStatus(ids, status)}
-                onReschedule={(ids, mode) => void handleReschedule(ids, mode)}
-                onRescheduleCustom={(ids, dueAt) => void handleRescheduleCustom(ids, dueAt)}
-                onDelete={(ids) => void handleDelete(ids)}
-              />
-            </div>
-            <DragOverlay dropAnimation={null}>
-              {dragTasks.length > 0 ? (
-                <TaskDragPreview tasks={dragTasks} now={now} />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        )}
+          <>
+            {error && (
+              <div className="mx-4 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+                <button
+                  type="button"
+                  className="ml-3 underline"
+                  onClick={() => setError(null)}
+                >
+                  dismiss
+                </button>
+              </div>
+            )}
 
-        {!loading && displayTasks.length === 0 && !error && (
-          <p className="pointer-events-none fixed inset-x-0 bottom-10 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
-            <span>No tasks yet — press</span>
-            <ShortcutKeys keys={["Ctrl", "N"]} />
-            <span>or use +</span>
-          </p>
+            {loading ? (
+              <p className="px-4 py-16 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={pointerWithin}
+                onDragStart={onDragStart}
+                onDragCancel={onDragCancel}
+                onDragEnd={(e) => void onDragEnd(e)}
+              >
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <TaskBoard
+                    tasks={displayTasks}
+                    now={now}
+                    visible={visibility}
+                    animateLayout={activeId === null}
+                    motionById={motionById}
+                    selectedIds={selectedIds}
+                    draggingIds={draggingIds}
+                    onToggleSelect={toggleSelect}
+                    onClearSelection={clearSelection}
+                    onPrepareContextSelection={prepareContextSelection}
+                    onToggleLane={(status) => void handleToggleLane(status)}
+                    onEdit={openEdit}
+                    onUpdateStatus={(ids, status) => void handleUpdateStatus(ids, status)}
+                    onReschedule={(ids, mode) => void handleReschedule(ids, mode)}
+                    onRescheduleCustom={(ids, dueAt) => void handleRescheduleCustom(ids, dueAt)}
+                    onDelete={(ids) => void handleDelete(ids)}
+                  />
+                </div>
+                <DragOverlay
+                  dropAnimation={null}
+                  modifiers={[snapCenterToCursor]}
+                  // PositionedOverlay matches the source card's box; center the compact
+                  // preview inside it so snapCenterToCursor lines up with the visible card.
+                  className="flex items-center justify-center"
+                >
+                  {dragTasks.length > 0 ? (
+                    <TaskDragPreview tasks={dragTasks} now={now} />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            )}
+
+            {!loading && displayTasks.length === 0 && !error && (
+              <p className="pointer-events-none fixed inset-x-0 bottom-10 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+                <span>No tasks yet — press</span>
+                <ShortcutKeys keys={["Ctrl", "N"]} />
+                <span>or use +</span>
+              </p>
+            )}
+          </>
         )}
       </AppShell>
 
