@@ -139,8 +139,23 @@ impl Default for LaneVisibility {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SyncthingSettings {
+    /// GUI/REST base URL, e.g. `http://127.0.0.1:8384`.
+    pub address: String,
+    pub api_key: String,
+}
+
+impl SyncthingSettings {
+    pub fn is_configured(&self) -> bool {
+        !self.api_key.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub lane_visibility: LaneVisibility,
+    #[serde(default)]
+    pub syncthing: SyncthingSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -23,6 +23,11 @@ croner = "2"
 dirs = "6"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+notify = "7"
+ureq = { version = "3", default-features = true }
+hex = "0.4"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

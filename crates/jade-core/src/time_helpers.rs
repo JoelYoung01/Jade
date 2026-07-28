@@ -142,8 +142,8 @@ mod tests {
     fn push_to_today_preserves_time() {
         let now = Local.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
         let due = Local.with_ymd_and_hms(2026, 7, 22, 9, 30, 0).unwrap();
-        let result =
-            push_to_today_at(due.with_timezone(&Utc), now.with_timezone(&Utc)).with_timezone(&Local);
+        let result = push_to_today_at(due.with_timezone(&Utc), now.with_timezone(&Utc))
+            .with_timezone(&Local);
         assert_eq!(result.date_naive(), now.date_naive());
         assert_eq!(result.time(), due.time());
     }

@@ -78,10 +78,7 @@ pub fn list_task_events(db: &Db, input: ListTaskEventsInput) -> Result<Vec<TaskE
 }
 
 /// List events with `seq > after_seq`, oldest first (for live sync / replication cursors).
-pub fn list_task_events_since(
-    db: &Db,
-    input: ListTaskEventsSinceInput,
-) -> Result<Vec<TaskEvent>> {
+pub fn list_task_events_since(db: &Db, input: ListTaskEventsSinceInput) -> Result<Vec<TaskEvent>> {
     let limit = input.limit.unwrap_or(DEFAULT_SINCE_LIMIT);
     let conn = db.connection();
     let mut stmt = conn.prepare(
@@ -147,7 +144,7 @@ fn task_event_from_parts(
 }
 
 /// Insert a task event inside an open transaction.
-pub(crate) fn insert_event(
+pub fn insert_event(
     tx: &rusqlite::Transaction<'_>,
     task_id: Uuid,
     event_type: TaskEventType,
@@ -158,7 +155,7 @@ pub(crate) fn insert_event(
 }
 
 /// Insert a task event with an explicit origin (for future peer/agent writers).
-pub(crate) fn insert_event_with_origin(
+pub fn insert_event_with_origin(
     tx: &rusqlite::Transaction<'_>,
     task_id: Uuid,
     event_type: TaskEventType,
@@ -185,12 +182,12 @@ pub(crate) fn insert_event_with_origin(
 }
 
 /// Full task snapshot for sync / UI apply (serde shape of [`Task`]).
-pub(crate) fn task_snapshot(task: &Task) -> Value {
+pub fn task_snapshot(task: &Task) -> Value {
     serde_json::to_value(task).unwrap_or(Value::Null)
 }
 
 /// Snapshot payload for a `created` event.
-pub(crate) fn created_payload(task: &Task, spawned_from: Option<Uuid>) -> Value {
+pub fn created_payload(task: &Task, spawned_from: Option<Uuid>) -> Value {
     let tag_names: Vec<&str> = task.tags.iter().map(|t| t.name.as_str()).collect();
     let mut map = Map::new();
     map.insert("title".into(), json!(task.title));
@@ -207,7 +204,7 @@ pub(crate) fn created_payload(task: &Task, spawned_from: Option<Uuid>) -> Value 
 }
 
 /// Build an `updated` payload from field diffs + after-state. Returns `None` if empty.
-pub(crate) fn updated_payload(changes: Map<String, Value>, after: &Task) -> Option<Value> {
+pub fn updated_payload(changes: Map<String, Value>, after: &Task) -> Option<Value> {
     if changes.is_empty() {
         None
     } else {
@@ -219,11 +216,11 @@ pub(crate) fn updated_payload(changes: Map<String, Value>, after: &Task) -> Opti
 }
 
 /// Tombstone payload for a `deleted` event.
-pub(crate) fn deleted_payload(task: &Task) -> Value {
+pub fn deleted_payload(task: &Task) -> Value {
     json!({ "task": task_snapshot(task) })
 }
 
-pub(crate) fn field_change(old: Value, new: Value) -> Value {
+pub fn field_change(old: Value, new: Value) -> Value {
     json!({ "old": old, "new": new })
 }
 
@@ -464,12 +461,12 @@ mod tests {
         .unwrap();
         assert_eq!(spawn_events.len(), 1);
         assert_eq!(spawn_events[0].event_type, TaskEventType::Created);
-        assert_eq!(
-            spawn_events[0].payload["spawned_from"],
-            task.id.to_string()
-        );
+        assert_eq!(spawn_events[0].payload["spawned_from"], task.id.to_string());
         assert_eq!(spawn_events[0].payload["tags"], json!(["chore"]));
-        assert_eq!(spawn_events[0].payload["task"]["id"], spawned.id.to_string());
+        assert_eq!(
+            spawn_events[0].payload["task"]["id"],
+            spawned.id.to_string()
+        );
     }
 
     #[test]

@@ -96,15 +96,15 @@ pub fn create_task(db: &Db, input: CreateTaskInput) -> Result<Task> {
             )?;
             tags.push(tag);
         }
-        tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        tags.sort_by_key(|a| a.name.to_lowercase());
 
         let snapshot = Task {
             id,
-            title: title.clone(),
-            description: description.clone(),
+            title,
+            description,
             status: TaskStatus::Inactive,
             due_at: input.due_at,
-            repeat_cron: repeat_cron.clone(),
+            repeat_cron,
             created_at: now,
             updated_at: now,
             deleted_at: None,
@@ -178,10 +178,7 @@ pub fn update_task_status(db: &Db, input: UpdateTaskStatusInput) -> Result<Statu
             if status_changed {
                 changes.insert(
                     "status".into(),
-                    field_change(
-                        json!(current.status.as_str()),
-                        json!(input.status.as_str()),
-                    ),
+                    field_change(json!(current.status.as_str()), json!(input.status.as_str())),
                 );
             }
             if cron_changed {
@@ -198,7 +195,7 @@ pub fn update_task_status(db: &Db, input: UpdateTaskStatusInput) -> Result<Statu
                     current.repeat_cron.clone()
                 },
                 updated_at: now,
-                ..current.clone()
+                ..current
             };
             if let Some(payload) = updated_payload(changes, &after) {
                 insert_event(&tx, input.id, TaskEventType::Updated, payload, now)?;
@@ -258,7 +255,7 @@ pub fn reschedule_task(
             let after = Task {
                 due_at: new_due,
                 updated_at: now,
-                ..current.clone()
+                ..current
             };
             if let Some(payload) = updated_payload(changes, &after) {
                 insert_event(&tx, id, TaskEventType::Updated, payload, now)?;
@@ -273,7 +270,7 @@ pub fn reschedule_task(
 pub fn delete_task(db: &Db, id: Uuid) -> Result<()> {
     let current = get_task(db, id)?;
     let now = Utc::now();
-    let mut tombstone = current.clone();
+    let mut tombstone = current;
     tombstone.deleted_at = Some(now);
     tombstone.updated_at = now;
 
@@ -494,8 +491,8 @@ fn write_task_update(
             names.push(tag.name.clone());
             tags.push(tag);
         }
-        names.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
-        tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        names.sort_by_key(|a| a.to_lowercase());
+        tags.sort_by_key(|a| a.name.to_lowercase());
         new_tag_names = Some(names);
         after_tags = tags;
     }
@@ -513,9 +510,13 @@ fn write_task_update(
         tags: after_tags,
     };
 
-    if let Some(payload) =
-        diff_task_update(current, resolved, stored_cron.as_deref(), new_tag_names.as_deref(), &after)
-    {
+    if let Some(payload) = diff_task_update(
+        current,
+        resolved,
+        stored_cron.as_deref(),
+        new_tag_names.as_deref(),
+        &after,
+    ) {
         insert_event(&tx, id, TaskEventType::Updated, payload, now)?;
     }
 
@@ -586,20 +587,12 @@ fn diff_task_update(
 ///
 /// Next due = first cron match strictly after `max(due_at, now)` in local time,
 /// so overdue completions skip the backlog (Apple Reminders behavior).
-fn spawn_next_if_recurring(
-    db: &Db,
-    task: &Task,
-    now: DateTime<Utc>,
-) -> Result<Option<Task>> {
+fn spawn_next_if_recurring(db: &Db, task: &Task, now: DateTime<Utc>) -> Result<Option<Task>> {
     let Some(cron) = task.repeat_cron.as_deref() else {
         return Ok(None);
     };
 
-    let after = if task.due_at > now {
-        task.due_at
-    } else {
-        now
-    };
+    let after = if task.due_at > now { task.due_at } else { now };
     let next_due = next_occurrence(cron, after)?;
     let new_id = Uuid::new_v4();
 
@@ -630,7 +623,7 @@ fn spawn_next_if_recurring(
                 params![new_id.to_string(), tag.id.to_string()],
             )?;
         }
-        tags.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        tags.sort_by_key(|a| a.name.to_lowercase());
 
         let snapshot = Task {
             id: new_id,
@@ -671,8 +664,8 @@ struct TaskRow {
 }
 
 fn task_from_row(row: TaskRow, tags: Vec<Tag>) -> Result<Task> {
-    let id = Uuid::parse_str(&row.id)
-        .map_err(|e| Error::Message(format!("invalid task id: {e}")))?;
+    let id =
+        Uuid::parse_str(&row.id).map_err(|e| Error::Message(format!("invalid task id: {e}")))?;
     Ok(Task {
         id,
         title: row.title,
@@ -1064,11 +1057,8 @@ mod tests {
     fn update_task_complete_also_spawns() {
         let db = open_memory().unwrap();
         let due = Utc::now() - chrono::Duration::hours(1);
-        let task = create_task(
-            &db,
-            recurring_input("Via update", due, "0 9 * * 1-5", &[]),
-        )
-        .unwrap();
+        let task =
+            create_task(&db, recurring_input("Via update", due, "0 9 * * 1-5", &[])).unwrap();
 
         let result = update_task(
             &db,

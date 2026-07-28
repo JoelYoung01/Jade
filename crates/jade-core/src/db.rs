@@ -83,6 +83,8 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/002_add_repeat_cron.sql"),
     include_str!("../migrations/003_task_events.sql"),
     include_str!("../migrations/004_task_events_seq_origin.sql"),
+    include_str!("../migrations/005_wiki.sql"),
+    include_str!("../migrations/006_wiki_fts.sql"),
 ];
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -134,7 +136,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 6);
 
         let count: i64 = conn
             .query_row(

@@ -1,21 +1,27 @@
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::db::Db;
 use crate::error::{Error, Result};
-use crate::models::{LaneVisibility, Settings};
+use crate::models::{LaneVisibility, Settings, SyncthingSettings};
 
 const LANE_VISIBILITY_KEY: &str = "lane_visibility";
+const SYNCTHING_KEY: &str = "syncthing";
 
 pub fn get_settings(db: &Db) -> Result<Settings> {
     let conn = db.connection();
-    let value: String = conn.query_row(
-        "SELECT value FROM settings WHERE key = ?1",
-        params![LANE_VISIBILITY_KEY],
-        |row| row.get(0),
-    )?;
-
-    let lane_visibility: LaneVisibility = serde_json::from_str(&value)?;
-    Ok(Settings { lane_visibility })
+    let lane_visibility: LaneVisibility = {
+        let value: String = conn.query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![LANE_VISIBILITY_KEY],
+            |row| row.get(0),
+        )?;
+        serde_json::from_str(&value)?
+    };
+    let syncthing = load_syncthing(&conn)?;
+    Ok(Settings {
+        lane_visibility,
+        syncthing,
+    })
 }
 
 pub fn set_lane_visibility(db: &Db, visibility: LaneVisibility) -> Result<Settings> {
@@ -31,9 +37,51 @@ pub fn set_lane_visibility(db: &Db, visibility: LaneVisibility) -> Result<Settin
     if updated == 0 {
         return Err(Error::Message("failed to persist lane visibility".into()));
     }
+    let syncthing = load_syncthing(&conn)?;
     Ok(Settings {
         lane_visibility: visibility,
+        syncthing,
     })
+}
+
+pub fn set_syncthing_settings(db: &Db, syncthing: SyncthingSettings) -> Result<Settings> {
+    let address = if syncthing.address.trim().is_empty() {
+        "http://127.0.0.1:8384".to_owned()
+    } else {
+        syncthing.address.trim().to_owned()
+    };
+    let stored = SyncthingSettings {
+        address,
+        api_key: syncthing.api_key,
+    };
+    let conn = db.connection();
+    let value = serde_json::to_string(&stored)?;
+    conn.execute(
+        "
+        INSERT INTO settings (key, value) VALUES (?1, ?2)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        ",
+        params![SYNCTHING_KEY, value],
+    )?;
+    drop(conn);
+    get_settings(db)
+}
+
+fn load_syncthing(conn: &rusqlite::Connection) -> Result<SyncthingSettings> {
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![SYNCTHING_KEY],
+            |row| row.get(0),
+        )
+        .optional()?;
+    match value {
+        Some(raw) => Ok(serde_json::from_str(&raw)?),
+        None => Ok(SyncthingSettings {
+            address: "http://127.0.0.1:8384".to_owned(),
+            api_key: String::new(),
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -63,6 +111,21 @@ mod tests {
 
         let reloaded = get_settings(&db).unwrap();
         assert!(!reloaded.lane_visibility.inactive);
-        assert!(reloaded.lane_visibility.complete);
+        assert!(!reloaded.syncthing.is_configured());
+    }
+
+    #[test]
+    fn persist_syncthing_settings() {
+        let db = open_memory().unwrap();
+        let updated = set_syncthing_settings(
+            &db,
+            SyncthingSettings {
+                address: "http://127.0.0.1:8384".into(),
+                api_key: "secret".into(),
+            },
+        )
+        .unwrap();
+        assert!(updated.syncthing.is_configured());
+        assert_eq!(updated.syncthing.api_key, "secret");
     }
 }
