@@ -30,6 +30,7 @@ import {
 import { TagLabel } from "@/components/TagLabel";
 import { describeCron } from "@/lib/repeat";
 import { parseTagParts } from "@/lib/tags";
+import { textFilterHasTerm } from "@/lib/taskFilter";
 import type { RescheduleMode, Task, TaskMotion, TaskStatus } from "@/lib/types";
 import {
   formatDue,
@@ -74,6 +75,8 @@ export type ReschedulePreset = Exclude<RescheduleMode, "custom">;
 type TaskCardProps = {
   task: Task;
   now: Date;
+  /** Current board text filter — used to highlight active tag terms. */
+  textQuery?: string;
   selected: boolean;
   /** True while this card is part of the active multi/single drag. */
   dragging: boolean;
@@ -83,6 +86,8 @@ type TaskCardProps = {
   onToggleSelect: (id: string) => void;
   onClearSelection: () => void;
   onPrepareContextSelection: (id: string) => void;
+  /** Toggle this tag name in the board text filter (OR terms). */
+  onFilterTag?: (tagName: string) => void;
   onEdit: (task: Task) => void;
   onUpdateStatus: (ids: string[], status: TaskStatus) => void;
   onReschedule: (ids: string[], mode: ReschedulePreset) => void;
@@ -171,6 +176,7 @@ export function TaskDragPreview({
 export function TaskCard({
   task,
   now,
+  textQuery = "",
   selected,
   dragging,
   motion,
@@ -178,6 +184,7 @@ export function TaskCard({
   onToggleSelect,
   onClearSelection,
   onPrepareContextSelection,
+  onFilterTag,
   onEdit,
   onUpdateStatus,
   onReschedule,
@@ -309,20 +316,45 @@ export function TaskCard({
                 <div className="mt-2 flex flex-wrap gap-1">
                   {task.tags.map((tag) => {
                     const keyed = parseTagParts(tag.name).kind === "keyed";
+                    const active = textFilterHasTerm(textQuery, tag.name);
                     return (
-                      <span
+                      <button
                         key={tag.id}
+                        type="button"
+                        title={
+                          active
+                            ? `Remove “${tag.name}” from filter`
+                            : `Filter by “${tag.name}”`
+                        }
+                        aria-pressed={active}
                         className={cn(
-                          "rounded bg-secondary text-[10px] text-secondary-foreground",
+                          "cursor-pointer rounded text-[10px] transition-colors",
                           keyed ? "py-0 pl-0 pr-1.5" : "px-1.5 py-0.5",
+                          active
+                            ? "bg-primary/20 text-primary ring-1 ring-primary/40"
+                            : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
                         )}
+                        onPointerDown={(event) => {
+                          // Don't start a card drag from a tag chip.
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onFilterTag?.(tag.name);
+                        }}
+                        onDoubleClick={(event) => {
+                          // Prevent card edit when double-clicking a chip.
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
                       >
                         <TagLabel
                           name={tag.name}
                           flushKey={keyed}
                           {...(keyed ? { className: "rounded" } : {})}
                         />
-                      </span>
+                      </button>
                     );
                   })}
                 </div>

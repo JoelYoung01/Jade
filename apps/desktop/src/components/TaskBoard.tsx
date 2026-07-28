@@ -4,6 +4,10 @@ import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { TaskCard, type ReschedulePreset } from "@/components/TaskCard";
+import {
+  matchesTextFilter,
+  toggleTagInTextFilter,
+} from "@/lib/taskFilter";
 import type { Task, TaskMotion, TaskStatus } from "@/lib/types";
 import {
   type DateRangePreset,
@@ -26,6 +30,7 @@ type LaneProps = {
   /** Total tasks in this status before board filters are applied. */
   unfilteredCount: number;
   now: Date;
+  textQuery: string;
   selectedIds: ReadonlySet<string>;
   draggingIds: ReadonlySet<string>;
   selectedTasks: Task[];
@@ -33,6 +38,7 @@ type LaneProps = {
   onToggleSelect: (id: string) => void;
   onClearSelection: () => void;
   onPrepareContextSelection: (id: string) => void;
+  onFilterTag: (tagName: string) => void;
   onEdit: (task: Task) => void;
   onUpdateStatus: (ids: string[], status: TaskStatus) => void;
   onReschedule: (ids: string[], mode: ReschedulePreset) => void;
@@ -45,6 +51,7 @@ function Lane({
   tasks,
   unfilteredCount,
   now,
+  textQuery,
   selectedIds,
   draggingIds,
   selectedTasks,
@@ -52,6 +59,7 @@ function Lane({
   onToggleSelect,
   onClearSelection,
   onPrepareContextSelection,
+  onFilterTag,
   onEdit,
   onUpdateStatus,
   onReschedule,
@@ -96,6 +104,7 @@ function Lane({
               key={task.id}
               task={task}
               now={now}
+              textQuery={textQuery}
               selected={selectedIds.has(task.id)}
               dragging={draggingIds.has(task.id)}
               motion={motionById?.get(task.id)}
@@ -103,6 +112,7 @@ function Lane({
               onToggleSelect={onToggleSelect}
               onClearSelection={onClearSelection}
               onPrepareContextSelection={onPrepareContextSelection}
+              onFilterTag={onFilterTag}
               onEdit={onEdit}
               onUpdateStatus={onUpdateStatus}
               onReschedule={onReschedule}
@@ -168,13 +178,7 @@ function matchesFilters(task: Task, filters: BoardFilters): boolean {
     }
   }
 
-  const query = textQuery.trim().toLowerCase();
-  if (!query) return true;
-
-  const haystack = [task.title, task.description ?? "", ...task.tags.map((t) => t.name)]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
+  return matchesTextFilter(task, textQuery);
 }
 
 export function TaskBoard({
@@ -292,6 +296,10 @@ export function TaskBoard({
     }
   }
 
+  function handleFilterTag(tagName: string): void {
+    setTextQuery((prev) => toggleTagInTextFilter(prev, tagName));
+  }
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-4 px-4 py-4">
       <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -299,10 +307,17 @@ export function TaskBoard({
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={filterInputRef}
+            data-jade-board-filter=""
             value={textQuery}
             onChange={(e) => setTextQuery(e.target.value)}
-            placeholder="Filter tasks…"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="Filter tasks… ( | = OR)"
             aria-label="Filter tasks"
+            title="Match any term separated by | (OR)"
             className="h-8 pl-8 text-xs"
           />
         </div>
@@ -381,6 +396,7 @@ export function TaskBoard({
               tasks={tasksByLane[status]}
               unfilteredCount={unfilteredCountByLane[status]}
               now={now}
+              textQuery={textQuery}
               selectedIds={selectedIds}
               draggingIds={draggingIds}
               selectedTasks={selectedTasks}
@@ -388,6 +404,7 @@ export function TaskBoard({
               onToggleSelect={onToggleSelect}
               onClearSelection={onClearSelection}
               onPrepareContextSelection={onPrepareContextSelection}
+              onFilterTag={handleFilterTag}
               onEdit={onEdit}
               onUpdateStatus={onUpdateStatus}
               onReschedule={onReschedule}

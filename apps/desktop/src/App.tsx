@@ -138,7 +138,10 @@ export default function App(): React.JSX.Element {
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
-        if (inField || view !== "tasks") return;
+        if (view !== "tasks") return;
+        // Board filter is a shortcut surface, not a content field — allow Ctrl/Cmd+N.
+        const inBoardFilter = Boolean(target?.closest?.("[data-jade-board-filter]"));
+        if (inField && !inBoardFilter) return;
         event.preventDefault();
         openCreate();
       }
