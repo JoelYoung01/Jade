@@ -38,11 +38,13 @@ describe("toDatetimeLocalValue", () => {
 describe("isOverdue", () => {
   const now = new Date("2026-07-21T12:00:00.000Z");
 
-  it("is true when due is in the past", () => {
-    expect(isOverdue("2026-07-21T11:59:59.000Z", now)).toBe(true);
+  it("is true when due is past the now grace window", () => {
+    expect(isOverdue("2026-07-21T11:58:59.000Z", now)).toBe(true);
   });
 
-  it("is false when due is now or in the future", () => {
+  it("is false within the now grace window or in the future", () => {
+    expect(isOverdue("2026-07-21T11:59:00.000Z", now)).toBe(false);
+    expect(isOverdue("2026-07-21T11:59:59.000Z", now)).toBe(false);
     expect(isOverdue("2026-07-21T12:00:00.000Z", now)).toBe(false);
     expect(isOverdue("2026-07-21T12:00:01.000Z", now)).toBe(false);
   });

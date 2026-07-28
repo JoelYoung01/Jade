@@ -36,6 +36,12 @@ function localMonthDiff(from: Date, to: Date): number {
 }
 
 /**
+ * Window around `now` shown as "now" in {@link formatDue} and treated as
+ * not overdue by {@link isOverdue} (avoids red styling for a few seconds past).
+ */
+export const DUE_NOW_WINDOW_MS = 60_000;
+
+/**
  * Format a due datetime for display. Within ±12 local calendar months of `now`,
  * uses relative phrasing up through months ("now", "in 5 minutes", "in 1 week",
  * "in 4 months", …). Beyond that, falls back to an absolute weekday/date/time.
@@ -56,7 +62,7 @@ export function formatDue(iso: string, now = new Date()): string {
     if (dayDiff === 0) {
       const deltaMs = date.getTime() - now.getTime();
       const absMs = Math.abs(deltaMs);
-      if (absMs <= 60_000) return "now";
+      if (absMs <= DUE_NOW_WINDOW_MS) return "now";
       const sign = deltaMs >= 0 ? 1 : -1;
       const absMinutes = Math.round(absMs / 60_000);
       if (absMinutes < 60) {
@@ -98,11 +104,14 @@ export function isToday(iso: string, now = new Date()): boolean {
   );
 }
 
-/** True when the due time is strictly before `now`. */
+/**
+ * True when the due time is past the "now" grace window
+ * ({@link DUE_NOW_WINDOW_MS}), so labels that still say "now" are not overdue.
+ */
 export function isOverdue(iso: string, now = new Date()): boolean {
   const due = new Date(iso);
   if (Number.isNaN(due.getTime())) return false;
-  return due.getTime() < now.getTime();
+  return due.getTime() < now.getTime() - DUE_NOW_WINDOW_MS;
 }
 
 /** Board date-range filter presets. */
