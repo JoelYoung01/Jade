@@ -81,6 +81,10 @@ fn takes_value(flag: &str) -> bool {
             | "--tag"
             | "-t"
             | "--repeat"
+            | "--label"
+            | "--root"
+            | "--format"
+            | "--limit"
     )
 }
 

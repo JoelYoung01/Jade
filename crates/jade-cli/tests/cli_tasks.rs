@@ -189,14 +189,7 @@ fn history_shows_create_and_update() {
 
     jade()
         .args([
-            "--db",
-            &db,
-            "tasks",
-            "update",
-            "--id",
-            id,
-            "--status",
-            "active",
+            "--db", &db, "tasks", "update", "--id", id, "--status", "active",
         ])
         .assert()
         .success();
@@ -242,4 +235,44 @@ fn update_requires_field() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("no fields to update"));
+}
+
+#[test]
+fn wiki_roots_list_search() {
+    let wiki_dir = TempDir::new().expect("wiki dir");
+    let note = wiki_dir.path().join("hello.md");
+    std::fs::write(
+        &note,
+        "---\ntitle: Hello Wiki\ntags:\n  - demo\n---\n# Hello Wiki\n\nBody.\n",
+    )
+    .expect("write note");
+
+    let (_dir, db) = temp_db();
+    let path = wiki_dir.path().to_string_lossy().into_owned();
+
+    jade()
+        .args([
+            "--db", &db, "wiki", "roots", "add", &path, "--label", "Demo",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Demo"));
+
+    jade()
+        .args(["--db", &db, "wiki", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hello Wiki"));
+
+    jade()
+        .args(["--db", &db, "wiki", "search", "Hello"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hello.md"));
+
+    jade()
+        .args(["wiki", "help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("filesystem markdown wiki"));
 }

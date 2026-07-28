@@ -25,10 +25,7 @@ fn print_events(events: &[TaskEvent], json: bool) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!(
-        "{:<22}  {:<36}  {:<8}  CHANGES",
-        "WHEN", "TASK", "TYPE"
-    );
+    println!("{:<22}  {:<36}  {:<8}  CHANGES", "WHEN", "TASK", "TYPE");
     println!("{}", "-".repeat(120));
     for event in events {
         let when = event.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
@@ -52,19 +49,21 @@ fn summarize_payload(event_type: TaskEventType, payload: &Value) -> String {
                 .or_else(|| payload.pointer("/task/title"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("(untitled)");
-            if let Some(from) = payload.get("spawned_from").and_then(|v| v.as_str()) {
-                format!("created \"{title}\" (spawned from {from})")
-            } else {
-                format!("created \"{title}\"")
-            }
+            payload
+                .get("spawned_from")
+                .and_then(|v| v.as_str())
+                .map_or_else(
+                    || format!("created \"{title}\""),
+                    |from| format!("created \"{title}\" (spawned from {from})"),
+                )
         }
-        TaskEventType::Deleted => {
-            if let Some(title) = payload.pointer("/task/title").and_then(|v| v.as_str()) {
-                format!("deleted \"{title}\"")
-            } else {
-                "deleted".to_owned()
-            }
-        }
+        TaskEventType::Deleted => payload
+            .pointer("/task/title")
+            .and_then(|v| v.as_str())
+            .map_or_else(
+                || "deleted".to_owned(),
+                |title| format!("deleted \"{title}\""),
+            ),
         TaskEventType::Updated => {
             // Prefer nested `changes` (sync envelope); fall back to flat field map.
             let changes = payload

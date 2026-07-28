@@ -11,6 +11,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "tasks update description" => Some(TASKS_UPDATE_DESCRIPTION),
         "tasks delete" => Some(TASKS_DELETE),
         "tasks history" => Some(TASKS_HISTORY),
+        "wiki" => Some(WIKI),
+        "wiki roots" => Some(WIKI_ROOTS),
+        "wiki list" => Some(WIKI_LIST),
+        "wiki search" => Some(WIKI_SEARCH),
         _ => None,
     }
 }
@@ -25,6 +29,7 @@ USAGE
 
 FEATURES
   tasks    Task tracking CRUD
+  wiki     Filesystem markdown wiki index
 
 GLOBAL OPTIONS
   --db <path>   Use a specific SQLite database (default: app data dir)
@@ -38,6 +43,10 @@ EXAMPLES
   jade tasks update --id <uuid> --status active
   jade tasks delete --id <uuid>
   jade tasks history --id <uuid>
+  jade wiki roots
+  jade wiki roots add ./notes
+  jade wiki list
+  jade wiki search \"recipes\"
 
 HELP TOPICS
   jade help
@@ -50,6 +59,10 @@ HELP TOPICS
   jade tasks update description help
   jade tasks delete help
   jade tasks history help
+  jade wiki help
+  jade wiki roots help
+  jade wiki list help
+  jade wiki search help
 
 NOTES
   The GUI does not need to be running. The CLI opens the same SQLite file
@@ -338,4 +351,66 @@ NOTES
   Each event has a monotonic seq (replication cursor), an origin (default
   local), and a full task snapshot under payload.task for sync/UI apply.
   Updated events nest field diffs under payload.changes.
+";
+
+const WIKI: &str = "\
+jade wiki — filesystem markdown wiki
+
+PURPOSE
+  Index one or more local folders of markdown files. Files (with YAML front
+  matter) are the source of truth; Jade stores location metadata + a search
+  cache in SQLite.
+
+USAGE
+  jade wiki <verb> [options]
+
+VERBS
+  roots     List / add / remove wiki root folders
+  list      List indexed pages
+  search    Search pages by title, path, or tags
+
+EXAMPLES
+  jade wiki roots add ~/Notes/wiki
+  jade wiki list
+  jade wiki search recipes
+
+NOTES
+  Syncthing is optional and not required. Prefer pointing at the wiki
+  subdirectory you care about, even if it lives inside a larger sync share.
+";
+
+const WIKI_ROOTS: &str = "\
+jade wiki roots — manage wiki root folders
+
+USAGE
+  jade wiki roots [--format plain|csv|json]
+  jade wiki roots add <path> [--label <name>]
+  jade wiki roots remove --id <uuid>
+
+EXAMPLES
+  jade wiki roots
+  jade wiki roots add ./notes --label Notes
+  jade wiki roots remove --id <uuid>
+";
+
+const WIKI_LIST: &str = "\
+jade wiki list — list indexed wiki pages
+
+USAGE
+  jade wiki list [--root <uuid>] [--format plain|csv|json]
+
+EXAMPLES
+  jade wiki list
+  jade wiki list --root <uuid> --json
+";
+
+const WIKI_SEARCH: &str = "\
+jade wiki search — search indexed wiki pages
+
+USAGE
+  jade wiki search <query> [--format plain|csv|json]
+
+EXAMPLES
+  jade wiki search \"project ideas\"
+  jade wiki search recipes --json
 ";

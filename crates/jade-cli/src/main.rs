@@ -3,6 +3,7 @@ mod due;
 mod help;
 mod output;
 mod tasks;
+mod wiki;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -10,6 +11,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 use tasks::{Globals, TasksCommand};
+use wiki::WikiCommand;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -39,6 +41,11 @@ enum Commands {
     Tasks {
         #[command(subcommand)]
         command: TasksCommand,
+    },
+    /// Filesystem wiki (markdown index)
+    Wiki {
+        #[command(subcommand)]
+        command: WikiCommand,
     },
 }
 
@@ -75,6 +82,7 @@ fn main() -> ExitCode {
 
     let result = match cli.command {
         Commands::Tasks { command } => tasks::run(command, &globals),
+        Commands::Wiki { command } => wiki::run(command, &globals),
     };
 
     match result {
