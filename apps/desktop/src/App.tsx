@@ -79,6 +79,7 @@ export default function App(): React.JSX.Element {
     prompt: updatePrompt,
     checking: updateChecking,
     checkManually,
+    runRoute,
     installPending,
     dismissPrompt,
   } = useAppUpdater();
@@ -458,6 +459,9 @@ export default function App(): React.JSX.Element {
       <UpdateDialog
         prompt={updatePrompt}
         onInstall={() => void installPending()}
+        onRunRoute={(route) => {
+          void runRoute(route);
+        }}
         onDismiss={dismissPrompt}
       />
     </TooltipProvider>

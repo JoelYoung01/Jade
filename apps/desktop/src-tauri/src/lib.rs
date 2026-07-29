@@ -1,9 +1,15 @@
+mod install_context;
 mod wiki_watch;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+use install_context::{
+    detect_install_context, fetch_aur_package_info, latest_appimage_download_url,
+    open_aur_update_in_konsole, AurPackageInfo, InstallContext,
+};
 
 use chrono::{DateTime, Utc};
 use jade_core::{
@@ -39,6 +45,26 @@ struct DbChangedPayload {
 
 const DB_CHANGED_EVENT: &str = "db-changed";
 const DATA_VERSION_POLL_MS: u64 = 350;
+
+#[tauri::command]
+fn get_install_context_cmd() -> InstallContext {
+    detect_install_context()
+}
+
+#[tauri::command]
+fn fetch_aur_package_info_cmd() -> Result<Option<AurPackageInfo>, String> {
+    fetch_aur_package_info()
+}
+
+#[tauri::command]
+fn open_aur_update_in_konsole_cmd() -> Result<(), String> {
+    open_aur_update_in_konsole()
+}
+
+#[tauri::command]
+fn latest_appimage_download_url_cmd() -> String {
+    latest_appimage_download_url()
+}
 
 #[tauri::command]
 fn list_tasks_cmd(state: tauri::State<'_, AppState>) -> Result<Vec<Task>, String> {
@@ -444,6 +470,10 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            get_install_context_cmd,
+            fetch_aur_package_info_cmd,
+            open_aur_update_in_konsole_cmd,
+            latest_appimage_download_url_cmd,
             list_tasks_cmd,
             create_task_cmd,
             update_task_status_cmd,

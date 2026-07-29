@@ -32,6 +32,7 @@ uuid = { workspace = true }
 thiserror = { workspace = true }
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+ureq = { workspace = true }
 
 [features]
 default = ["custom-protocol"]

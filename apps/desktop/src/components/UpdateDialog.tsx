@@ -9,20 +9,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { UpdatePrompt } from "@/lib/updater";
+import type { UpdatePrompt, UpdateRoute } from "@/lib/updater";
+import { cn } from "@/lib/utils";
 
 type UpdateDialogProps = {
   prompt: UpdatePrompt | null;
   onInstall: () => void;
+  onRunRoute: (route: UpdateRoute) => void;
   onDismiss: () => void;
 };
 
 export function UpdateDialog({
   prompt,
   onInstall,
+  onRunRoute,
   onDismiss,
 }: UpdateDialogProps): React.JSX.Element {
   const open = prompt !== null && prompt.kind !== "checking";
+  const linuxChooser =
+    prompt?.kind === "available" && prompt.routes.length > 0;
 
   const title = (() => {
     switch (prompt?.kind) {
@@ -32,8 +37,6 @@ export function UpdateDialog({
         return "You're up to date";
       case "error":
         return "Update check failed";
-      case "linuxPackageManager":
-        return "Updates via package manager";
       case "installing":
         return "Installing update";
       default:
@@ -44,6 +47,9 @@ export function UpdateDialog({
   const description = (() => {
     switch (prompt?.kind) {
       case "available": {
+        if (linuxChooser) {
+          return `Jade ${prompt.version} is available. Choose how to update based on how you installed the app.`;
+        }
         const notes = prompt.notes?.trim();
         return notes
           ? `Jade ${prompt.version} is ready to install.\n\n${notes}`
@@ -53,8 +59,6 @@ export function UpdateDialog({
         return "You already have the latest version of Jade.";
       case "error":
         return prompt.message;
-      case "linuxPackageManager":
-        return "On Arch / EndeavourOS, update Jade with your AUR helper (for example yay -Syu jade-desktop-bin), not from inside the app.";
       case "installing":
         return `Downloading and installing Jade ${prompt.version}. The app will restart when finished.`;
       default:
@@ -69,26 +73,90 @@ export function UpdateDialog({
         if (!next && prompt?.kind !== "installing") onDismiss();
       }}
     >
-      <DialogContent>
+      <DialogContent className={linuxChooser ? "sm:max-w-lg" : undefined}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? (
             <DialogDescription className="whitespace-pre-wrap">{description}</DialogDescription>
           ) : null}
         </DialogHeader>
+
+        {linuxChooser && prompt.kind === "available" ? (
+          <div className="grid gap-2">
+            {prompt.routes.map((route) => (
+              <UpdateRouteCard
+                key={route.id}
+                route={route}
+                onSelect={() => onRunRoute(route)}
+              />
+            ))}
+          </div>
+        ) : null}
+
         <DialogFooter>
-          {prompt?.kind === "available" ? (
+          {prompt?.kind === "available" && !linuxChooser ? (
             <>
               <Button variant="ghost" onClick={onDismiss}>
                 Later
               </Button>
-              <Button onClick={onInstall}>Update now</Button>
+              {prompt.canSelfInstall ? (
+                <Button onClick={onInstall}>Update now</Button>
+              ) : (
+                <Button onClick={onDismiss}>OK</Button>
+              )}
             </>
+          ) : prompt?.kind === "available" && linuxChooser ? (
+            <Button variant="ghost" onClick={onDismiss}>
+              Later
+            </Button>
           ) : prompt?.kind === "installing" ? null : (
             <Button onClick={onDismiss}>OK</Button>
           )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function UpdateRouteCard({
+  route,
+  onSelect,
+}: {
+  route: UpdateRoute;
+  onSelect: () => void;
+}): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        "rounded-md border border-border/70 bg-background/40 p-3",
+        route.recommended && "border-primary/50",
+        !route.enabled && "opacity-60",
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-foreground">{route.title}</p>
+            {route.recommendedLabel ? (
+              <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-primary uppercase">
+                {route.recommendedLabel}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">{route.description}</p>
+          {!route.enabled && route.disabledReason ? (
+            <p className="text-xs text-destructive/90">{route.disabledReason}</p>
+          ) : null}
+        </div>
+        <Button
+          size="sm"
+          variant={route.recommended ? "default" : "secondary"}
+          disabled={!route.enabled}
+          onClick={onSelect}
+        >
+          {route.actionLabel}
+        </Button>
+      </div>
+    </div>
   );
 }
