@@ -11,7 +11,14 @@ Local-first personal software. Windows-first Tauri desktop app + shared Rust dom
 
 The installer is **not Authenticode-signed** yet, so Windows SmartScreen may warn on first launch — use “More info” → “Run anyway” if you trust this build.
 
-After install, Jade checks for updates on startup (Windows only). You can also use the app menu (**⋯** → **Check for updates**).
+After install, Jade checks for updates on startup. You can also use the app menu (**⋯** → **Check for updates**).
+
+### Linux AppImage
+
+1. Download the `.AppImage` from [GitHub Releases](https://github.com/JoelYoung01/Jade/releases).
+2. `chmod +x Jade_*.AppImage` and run it.
+
+While Jade is running as an AppImage, **Check for updates** can download and replace that AppImage in place (signed updater artifacts).
 
 ### Arch / EndeavourOS (AUR)
 
@@ -19,13 +26,15 @@ Prefer the binary AUR package (recipe lives in [`packaging/aur/jade-desktop-bin`
 
 ```bash
 yay -S jade-desktop-bin
-# or
-paru -S jade-desktop-bin
 ```
 
-Updates on Arch come from your AUR helper / pacman — not from the in-app updater.
+In-app **Check for updates** detects an AUR install and can open Konsole with a targeted `yay -S --needed jade-desktop-bin` command. Jade will not overwrite pacman-owned files itself.
 
-Until the package is published on the AUR, you can install a release `.deb` manually or build the PKGBUILD locally (see that folder’s README).
+Until `jade-desktop-bin` is published on the AUR, use the AppImage (or build the PKGBUILD locally — see that folder’s README).
+
+### Debian / Ubuntu (`.deb`)
+
+A `.deb` is published on each release for manual install. Updates are not applied in-app for `.deb` installs (use your package manager or switch to the AppImage).
 
 ## Setup (Windows development)
 
@@ -86,7 +95,7 @@ First `just dev` compiles Rust and opens the Jade window. Hot reload covers the 
    git push origin main
    git push origin v0.x.y
    ```
-4. The **Publish** workflow builds Windows (NSIS + updater) and Linux (`.deb`), then uploads them to a GitHub Release with `latest.json` for the Windows updater.
-5. For Arch: update [`packaging/aur/jade-desktop-bin`](./packaging/aur/jade-desktop-bin) and push to the AUR (manual — see that README).
+4. The **Publish** workflow builds Windows (NSIS + updater), Linux (`.deb` + `.AppImage` + updater), and uploads them to a GitHub Release with `latest.json`.
+5. For Arch: update [`packaging/aur/jade-desktop-bin`](./packaging/aur/jade-desktop-bin) and push to the AUR (manual — see that README) before AUR users can update via yay.
 
 CI on `main` still uploads a Windows installer Actions artifact (30-day retention) as a smoke build; durable installs should use Releases.

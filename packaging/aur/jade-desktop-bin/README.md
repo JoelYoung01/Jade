@@ -2,13 +2,13 @@
 
 Binary AUR package that installs the Linux `.deb` published by Jade’s GitHub Releases workflow.
 
-In-app self-update is **Windows-only**. On Arch / EndeavourOS, update with your AUR helper:
+On Arch / EndeavourOS, prefer updating with yay (the desktop app can open Konsole with this command):
 
 ```bash
-yay -Syu jade-desktop-bin
-# or
-paru -Syu jade-desktop-bin
+yay -S --needed jade-desktop-bin
 ```
+
+Do not use the AppImage in-app updater against a pacman-owned install — Jade detects AUR installs and routes updates through yay instead.
 
 ## One-time AUR setup
 
