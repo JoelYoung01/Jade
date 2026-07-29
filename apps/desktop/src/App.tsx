@@ -15,9 +15,11 @@ import { AppShell } from "@/components/AppShell";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { TaskBoard } from "@/components/TaskBoard";
 import { TaskDragPreview, type ReschedulePreset } from "@/components/TaskCard";
+import { UpdateDialog } from "@/components/UpdateDialog";
 import { WikiView } from "@/components/WikiView";
 import { ShortcutKeys } from "@/components/ui/kbd";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAppUpdater } from "@/lib/useAppUpdater";
 import {
   apiCountTasksWithTag,
   apiCreateTask,
@@ -72,6 +74,14 @@ export default function App(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = React.useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
+  const {
+    prompt: updatePrompt,
+    checking: updateChecking,
+    checkManually,
+    installPending,
+    dismissPrompt,
+  } = useAppUpdater();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -350,7 +360,15 @@ export default function App(): React.JSX.Element {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <AppShell view={view} onViewChange={setView} onCreateTask={openCreate}>
+      <AppShell
+        view={view}
+        onViewChange={setView}
+        onCreateTask={openCreate}
+        onCheckForUpdates={() => {
+          void checkManually();
+        }}
+        updateChecking={updateChecking}
+      >
         {view === "wiki" ? (
           <WikiView />
         ) : (
@@ -435,6 +453,12 @@ export default function App(): React.JSX.Element {
           await apiDeleteTag(tagId);
           await refreshAndAck();
         }}
+      />
+
+      <UpdateDialog
+        prompt={updatePrompt}
+        onInstall={() => void installPending()}
+        onDismiss={dismissPrompt}
       />
     </TooltipProvider>
   );

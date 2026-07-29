@@ -35,6 +35,11 @@ ui:
 build:
     {{pnpm}} build
 
+# Sync versions across package.json / Cargo.toml / tauri.conf.json
+# Example: just bump 0.2.0
+bump version:
+    node scripts/bump-version.mjs {{version}}
+
 # Run the jade CLI. Prefer: just cli help | just cli tasks list
 # Use an extra -- only when an arg looks like a just flag: just cli -- --json tasks list
 cli *args:

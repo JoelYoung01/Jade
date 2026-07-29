@@ -30,6 +30,8 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"
 
 [features]
 default = ["custom-protocol"]

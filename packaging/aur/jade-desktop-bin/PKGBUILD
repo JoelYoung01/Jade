@@ -1,0 +1,48 @@
+# Maintainer: Joel Young <joel@local>
+# Binary package: installs the official .deb from GitHub Releases.
+#
+# After each release:
+#   1. Update pkgver below to match the GitHub release / tauri.conf.json version
+#   2. Download the .deb and refresh sha256sums_x86_64:
+#        curl -L -o Jade_${pkgver}_amd64.deb \
+#          "https://github.com/JoelYoung01/Jade/releases/download/v${pkgver}/Jade_${pkgver}_amd64.deb"
+#        sha256sum Jade_${pkgver}_amd64.deb
+#   3. makepkg --printsrcinfo > .SRCINFO
+#   4. Push to the AUR clone (see README.md)
+
+pkgname=jade-desktop-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Local-first personal software (tasks + wiki) — prebuilt binary"
+arch=('x86_64')
+url="https://github.com/JoelYoung01/Jade"
+license=('MIT')
+depends=(
+  'cairo'
+  'desktop-file-utils'
+  'gdk-pixbuf2'
+  'glib2'
+  'gtk3'
+  'hicolor-icon-theme'
+  'libsoup'
+  'pango'
+  'webkit2gtk-4.1'
+)
+provides=('jade-desktop')
+conflicts=('jade-desktop' 'jade-desktop-git')
+options=('!strip' '!debug')
+install="${pkgname}.install"
+source_x86_64=(
+  "Jade_${pkgver}_amd64.deb::${url}/releases/download/v${pkgver}/Jade_${pkgver}_amd64.deb"
+)
+sha256sums_x86_64=('SKIP')
+
+package() {
+  local data
+  data="$(find "${srcdir}" -maxdepth 1 -type f -name 'data.tar.*' | head -n1)"
+  if [[ -z "${data}" ]]; then
+    echo "data.tar.* not found after extracting .deb" >&2
+    return 1
+  fi
+  bsdtar -xf "${data}" -C "${pkgdir}"
+}

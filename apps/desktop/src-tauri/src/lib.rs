@@ -424,6 +424,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
             let path = default_db_path().map_err(|e| e.to_string())?;
             let db = open_db(&path).map_err(|e| e.to_string())?;

@@ -1,9 +1,19 @@
 import * as React from "react";
-import { BookOpen, CheckSquare, Plus } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
+import { BookOpen, CheckSquare, MoreVertical, Plus, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ShortcutKeys } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { isTauriRuntime } from "@/lib/runtime";
 import type { AppView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +21,8 @@ type AppShellProps = {
   view: AppView;
   onViewChange: (view: AppView) => void;
   onCreateTask: () => void;
+  onCheckForUpdates: () => void;
+  updateChecking?: boolean;
   children: React.ReactNode;
 };
 
@@ -18,8 +30,29 @@ export function AppShell({
   view,
   onViewChange,
   onCreateTask,
+  onCheckForUpdates,
+  updateChecking = false,
   children,
 }: AppShellProps): React.JSX.Element {
+  const [version, setVersion] = React.useState<string | null>(() =>
+    isTauriRuntime() ? null : "0.1.0-dev",
+  );
+
+  React.useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let cancelled = false;
+    void getVersion()
+      .then((next) => {
+        if (!cancelled) setVersion(next);
+      })
+      .catch(() => {
+        if (!cancelled) setVersion(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex items-center justify-between border-b border-border/60 px-3 py-2">
@@ -74,21 +107,42 @@ export function AppShell({
           </span>
         </div>
 
-        {view === "tasks" ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={onCreateTask} aria-label="New task">
-                <Plus />
+        <div className="flex items-center gap-1">
+          {view === "tasks" ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={onCreateTask} aria-label="New task">
+                  <Plus />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="flex items-center gap-1.5">
+                <span>New task</span>
+                <ShortcutKeys keys={["Ctrl", "N"]} className="text-background" />
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="App menu">
+                <MoreVertical />
               </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="flex items-center gap-1.5">
-              <span>New task</span>
-              <ShortcutKeys keys={["Ctrl", "N"]} className="text-background" />
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <div className="size-9" aria-hidden />
-        )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {version ? <DropdownMenuLabel>Version {version}</DropdownMenuLabel> : null}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={updateChecking}
+                onSelect={() => {
+                  void onCheckForUpdates();
+                }}
+              >
+                <RefreshCw className={cn("mr-2 size-4", updateChecking && "animate-spin")} />
+                Check for updates
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>

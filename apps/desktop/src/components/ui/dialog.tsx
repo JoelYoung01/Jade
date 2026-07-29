@@ -53,6 +53,12 @@ export function DialogHeader({ className, ...props }: React.ComponentProps<"div"
   return <div className={cn("flex flex-col gap-1.5 text-left", className)} {...props} />;
 }
 
+export function DialogFooter({ className, ...props }: React.ComponentProps<"div">): React.JSX.Element {
+  return (
+    <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />
+  );
+}
+
 export function DialogTitle({
   className,
   ...props
