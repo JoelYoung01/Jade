@@ -24,7 +24,7 @@ jobs:
           - platform: windows-latest
             args: --bundles nsis
           - platform: ubuntu-22.04
-            args: --bundles deb
+            args: --bundles deb,appimage
 
     steps:
       - name: Checkout
@@ -76,10 +76,12 @@ jobs:
           releaseBody: |
             ## Install
 
-            - **Windows:** download the `*-setup.exe` installer
-            - **Arch / EndeavourOS:** prefer the AUR package `jade-desktop-bin` (see `packaging/aur/jade-desktop-bin`), or install the `.deb` manually
+            - **Windows:** download the `*-setup.exe` installer (in-app updates)
+            - **Linux (portable):** download the `.AppImage` (in-app updates while running as AppImage)
+            - **Arch / EndeavourOS:** prefer AUR `jade-desktop-bin` (see `packaging/aur/jade-desktop-bin`); update with `yay`
+            - **Debian/Ubuntu:** `.deb` is available for manual install (no in-app overwrite)
 
-            Windows builds are unsigned (SmartScreen may warn). Updates install in-app on Windows.
+            Windows builds are unsigned (SmartScreen may warn).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
