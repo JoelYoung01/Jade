@@ -9,7 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { UpdatePrompt, UpdateRoute } from "@/lib/updater";
+import { Progress } from "@/components/ui/progress";
+import {
+  formatBytes,
+  progressPercent,
+  type UpdatePrompt,
+  type UpdateProgress,
+  type UpdateRoute,
+} from "@/lib/updater";
 import { cn } from "@/lib/utils";
 
 type UpdateDialogProps = {
@@ -38,7 +45,9 @@ export function UpdateDialog({
       case "error":
         return "Update check failed";
       case "installing":
-        return "Installing update";
+        return prompt.progress.phase === "installing"
+          ? "Installing update"
+          : "Downloading update";
       default:
         return "Updates";
     }
@@ -46,21 +55,18 @@ export function UpdateDialog({
 
   const description = (() => {
     switch (prompt?.kind) {
-      case "available": {
-        if (linuxChooser) {
-          return `Jade ${prompt.version} is available. Choose how to update based on how you installed the app.`;
-        }
-        const notes = prompt.notes?.trim();
-        return notes
-          ? `Jade ${prompt.version} is ready to install.\n\n${notes}`
+      case "available":
+        return linuxChooser
+          ? `Jade ${prompt.version} is available. Choose how to update based on how you installed the app.`
           : `Jade ${prompt.version} is ready to install.`;
-      }
       case "upToDate":
         return "You already have the latest version of Jade.";
       case "error":
         return prompt.message;
       case "installing":
-        return `Downloading and installing Jade ${prompt.version}. The app will restart when finished.`;
+        return prompt.progress.phase === "installing"
+          ? `Installing Jade ${prompt.version}. The app will restart when finished.`
+          : `Downloading Jade ${prompt.version}.`;
       default:
         return null;
     }
@@ -77,9 +83,13 @@ export function UpdateDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? (
-            <DialogDescription className="whitespace-pre-wrap">{description}</DialogDescription>
+            <DialogDescription>{description}</DialogDescription>
           ) : null}
         </DialogHeader>
+
+        {prompt?.kind === "installing" ? (
+          <UpdateProgressBar progress={prompt.progress} />
+        ) : null}
 
         {linuxChooser && prompt.kind === "available" ? (
           <div className="grid gap-2">
@@ -115,6 +125,31 @@ export function UpdateDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function UpdateProgressBar({
+  progress,
+}: {
+  progress: UpdateProgress;
+}): React.JSX.Element {
+  const percent = progressPercent(progress);
+  const installing = progress.phase === "installing";
+
+  return (
+    <div className="space-y-2">
+      <Progress value={percent} />
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          {installing
+            ? "Running the installer…"
+            : progress.contentLength
+              ? `${formatBytes(progress.downloaded)} of ${formatBytes(progress.contentLength)}`
+              : formatBytes(progress.downloaded)}
+        </span>
+        {percent === null ? null : <span>{Math.round(percent)}%</span>}
+      </div>
+    </div>
   );
 }
 

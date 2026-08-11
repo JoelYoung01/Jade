@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
+import { openExternalUrl } from "@/lib/openExternal";
 import { isTauriRuntime } from "@/lib/runtime";
 
 export type InstallKind = "windows" | "appImage" | "aur" | "deb" | "unknown";
@@ -40,18 +40,24 @@ export type UpdateRoute = {
   action: "installAppImage" | "downloadAppImage" | "openAurKonsole";
 };
 
+export type UpdateProgress = {
+  phase: "downloading" | "installing";
+  downloaded: number;
+  /** Null when the server does not report a content length. */
+  contentLength: number | null;
+};
+
 export type UpdatePrompt =
   | {
       kind: "available";
       version: string;
-      notes: string | null;
       /** Present for Windows / AppImage self-update. */
       canSelfInstall: boolean;
       routes: UpdateRoute[];
     }
   | { kind: "upToDate" }
   | { kind: "error"; message: string }
-  | { kind: "installing"; version: string }
+  | { kind: "installing"; version: string; progress: UpdateProgress }
   | { kind: "checking" };
 
 const MOCK_WINDOWS_CONTEXT: InstallContext = {
@@ -81,11 +87,7 @@ export async function openAurUpdateInKonsole(): Promise<void> {
 }
 
 export async function openReleasesPage(url: string): Promise<void> {
-  if (!isTauriRuntime()) {
-    window.open(url, "_blank", "noopener,noreferrer");
-    return;
-  }
-  await openUrl(url);
+  await openExternalUrl(url);
 }
 
 export function usesTauriSelfUpdate(ctx: InstallContext): boolean {
@@ -100,9 +102,53 @@ export async function checkForAppUpdate(): Promise<Update | null> {
   return check();
 }
 
-export async function downloadAndInstallUpdate(update: Update): Promise<void> {
-  await update.downloadAndInstall();
+export async function downloadAndInstallUpdate(
+  update: Update,
+  onProgress?: (progress: UpdateProgress) => void,
+): Promise<void> {
+  const state = { downloaded: 0, contentLength: null as number | null };
+  await update.downloadAndInstall((event) => {
+    switch (event.event) {
+      case "Started":
+        state.downloaded = 0;
+        state.contentLength = event.data.contentLength ?? null;
+        onProgress?.({ phase: "downloading", ...state });
+        break;
+      case "Progress":
+        state.downloaded += event.data.chunkLength;
+        onProgress?.({ phase: "downloading", ...state });
+        break;
+      case "Finished":
+        onProgress?.({
+          phase: "installing",
+          downloaded: state.downloaded,
+          contentLength: state.contentLength ?? state.downloaded,
+        });
+        break;
+      default:
+        break;
+    }
+  });
   await relaunch();
+}
+
+export function progressPercent(progress: UpdateProgress): number | null {
+  if (progress.phase === "installing") return 100;
+  if (!progress.contentLength || progress.contentLength <= 0) return null;
+  const pct = (progress.downloaded / progress.contentLength) * 100;
+  return Math.min(100, Math.max(0, pct));
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
 export function parseSemver(raw: string): [number, number, number] | null {

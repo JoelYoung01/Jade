@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildLinuxRoutes,
+  formatBytes,
   isNewerVersion,
   parseSemver,
+  progressPercent,
   type InstallContext,
 } from "@/lib/updater";
 
@@ -30,6 +32,29 @@ describe("parseSemver / isNewerVersion", () => {
     expect(isNewerVersion("0.1.0", "0.1.1")).toBe(true);
     expect(isNewerVersion("0.1.1", "0.1.1")).toBe(false);
     expect(isNewerVersion("0.2.0", "0.1.9")).toBe(false);
+  });
+});
+
+describe("progressPercent / formatBytes", () => {
+  it("returns null while the download size is unknown", () => {
+    expect(
+      progressPercent({ phase: "downloading", downloaded: 512, contentLength: null }),
+    ).toBeNull();
+  });
+
+  it("reports download percent and pins the install phase at 100", () => {
+    expect(
+      progressPercent({ phase: "downloading", downloaded: 50, contentLength: 200 }),
+    ).toBe(25);
+    expect(
+      progressPercent({ phase: "installing", downloaded: 50, contentLength: 200 }),
+    ).toBe(100);
+  });
+
+  it("formats byte counts", () => {
+    expect(formatBytes(900)).toBe("900 B");
+    expect(formatBytes(1536)).toBe("1.5 KB");
+    expect(formatBytes(12 * 1024 * 1024)).toBe("12 MB");
   });
 });
 

@@ -84,7 +84,6 @@ export function useAppUpdater(): UseAppUpdaterResult {
             setPrompt({
               kind: "available",
               version: update.version,
-              notes: update.body ?? null,
               canSelfInstall: true,
               routes,
             });
@@ -102,7 +101,6 @@ export function useAppUpdater(): UseAppUpdaterResult {
         let aurRemoteVersion: string | null = null;
         let aurFetchFailed = false;
         let remoteVersion: string | null = null;
-        let notes: string | null = null;
 
         if (ctx.kind === "aur" || ctx.archBased) {
           try {
@@ -124,7 +122,6 @@ export function useAppUpdater(): UseAppUpdaterResult {
           const update = await checkForAppUpdate();
           if (update) {
             githubVersion = update.version;
-            notes = update.body ?? null;
             // Keep pending only when current install can self-install AppImage.
             if (ctx.kind === "appImage") {
               pendingRef.current = update;
@@ -196,7 +193,6 @@ export function useAppUpdater(): UseAppUpdaterResult {
           setPrompt({
             kind: "available",
             version: remoteVersion,
-            notes,
             canSelfInstall: Boolean(pendingRef.current),
             routes: normalized,
           });
@@ -249,9 +245,20 @@ export function useAppUpdater(): UseAppUpdaterResult {
   const installPending = React.useCallback(async () => {
     const update = pendingRef.current;
     if (!update) return;
-    setPrompt({ kind: "installing", version: update.version });
+    setPrompt({
+      kind: "installing",
+      version: update.version,
+      progress: { phase: "downloading", downloaded: 0, contentLength: null },
+    });
     try {
-      await downloadAndInstallUpdate(update);
+      let lastPaint = 0;
+      await downloadAndInstallUpdate(update, (progress) => {
+        // Chunk callbacks fire far faster than the UI needs to repaint.
+        const now = Date.now();
+        if (progress.phase === "downloading" && now - lastPaint < 100) return;
+        lastPaint = now;
+        setPrompt({ kind: "installing", version: update.version, progress });
+      });
     } catch (err) {
       setPrompt({
         kind: "error",

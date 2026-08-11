@@ -134,6 +134,19 @@
   .jade-card-flash {
     animation: jade-card-flash 650ms ease-out;
   }
+
+  @keyframes jade-progress-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+
+  .jade-progress-indeterminate {
+    animation: jade-progress-indeterminate 1.2s ease-in-out infinite;
+  }
 }
 
 /* Wiki document render mode */
