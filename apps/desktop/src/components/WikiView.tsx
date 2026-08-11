@@ -623,7 +623,12 @@ export function WikiView(): React.JSX.Element {
                 spellCheck={false}
               />
             ) : (
-              <MarkdownView markdown={content.body} highlightQuery={highlightQuery} />
+              <MarkdownView
+                markdown={content.body}
+                pages={pages}
+                highlightQuery={highlightQuery}
+                onWikiLink={(pageId) => selectPage(pageId)}
+              />
             )}
             {!editing && backlinks.length > 0 ? (
               <div className="border-t border-border/60 px-3 py-2">

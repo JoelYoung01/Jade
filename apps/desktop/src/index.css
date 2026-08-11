@@ -188,6 +188,36 @@
   text-underline-offset: 2px;
 }
 
+.wiki-prose a.wiki-citation,
+.wiki-prose button.wiki-citation {
+  color: var(--color-primary);
+  cursor: pointer;
+  display: inline;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  padding: 0;
+  text-decoration: none;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.wiki-prose a.wiki-citation:hover,
+.wiki-prose button.wiki-citation:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wiki-prose button.wiki-citation-missing {
+  color: var(--color-muted-foreground);
+  cursor: default;
+  text-decoration: none;
+}
+
+.wiki-prose button.wiki-citation-missing:hover {
+  text-decoration: none;
+}
+
 .wiki-prose ul,
 .wiki-prose ol {
   padding-left: 1.35rem;
