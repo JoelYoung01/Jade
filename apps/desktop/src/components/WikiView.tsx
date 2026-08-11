@@ -1,5 +1,5 @@
 import * as React from "react";
-import { BookOpen, Folder, FolderPlus, Pencil, Plus, RefreshCw, Save, Search } from "lucide-react";
+import { BookOpen, ExternalLink, Folder, FolderPlus, Pencil, Plus, RefreshCw, Save, Search } from "lucide-react";
 
 import { MarkdownView } from "@/components/MarkdownView";
 import { WikiSearchDialog } from "@/components/WikiSearchDialog";
@@ -30,6 +30,7 @@ import {
   apiWriteWikiPage,
   apiGetSettings,
 } from "@/lib/api";
+import { openExternalUrl } from "@/lib/openExternal";
 import type {
   SyncthingSettings,
   SyncthingStatus,
@@ -599,20 +600,43 @@ export function WikiView(): React.JSX.Element {
                   </Button>
                 </div>
               ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={handleStartEdit}
-                      aria-label="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                      Edit
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Edit markdown</TooltipContent>
-                </Tooltip>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {content.front_matter?.source?.trim() ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            const source = content.front_matter?.source?.trim();
+                            if (source) void openExternalUrl(source);
+                          }}
+                          aria-label="Open source"
+                        >
+                          <ExternalLink className="size-3.5" />
+                          Source
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-sm break-all">
+                        {content.front_matter.source.trim()}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleStartEdit}
+                        aria-label="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                        Edit
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Edit markdown</TooltipContent>
+                  </Tooltip>
+                </div>
               )}
             </div>
             {editing ? (
