@@ -19,7 +19,17 @@ pub struct FrontMatter {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date_added: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<String>,
     /// Preserve unknown keys when round-tripping via Value merge is handled separately.
     #[serde(flatten)]
     pub extra: serde_json::Map<String, Value>,
@@ -116,6 +126,17 @@ pub fn first_heading(body: &str) -> Option<String> {
     None
 }
 
+/// Best date for "recently added" sorting: `date_added`, then `date`.
+pub fn resolve_date_added(fm: Option<&FrontMatter>) -> Option<String> {
+    fm.and_then(|f| {
+        f.date_added
+            .as_ref()
+            .or(f.date.as_ref())
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+    })
+}
+
 /// Title from front matter, else first heading, else file stem.
 pub fn resolve_title(fm: Option<&FrontMatter>, body: &str, file_stem: &str) -> String {
     if let Some(title) = fm
@@ -156,6 +177,16 @@ mod tests {
         let rendered = render_markdown(&fm, &parsed.body).unwrap();
         let again = parse_markdown(&rendered).unwrap();
         assert_eq!(again.front_matter.unwrap().title.as_deref(), Some("Note"));
+    }
+
+    #[test]
+    fn resolve_date_added_prefers_date_added() {
+        let fm = FrontMatter {
+            date_added: Some("2026-08-27".into()),
+            date: Some("2026-01-01".into()),
+            ..FrontMatter::default()
+        };
+        assert_eq!(resolve_date_added(Some(&fm)).as_deref(), Some("2026-08-27"));
     }
 
     #[test]

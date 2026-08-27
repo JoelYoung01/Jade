@@ -5,7 +5,8 @@ mod links;
 mod syncthing;
 
 pub use frontmatter::{
-    ensure_identity, parse_markdown, render_markdown, resolve_title, FrontMatter,
+    ensure_identity, parse_markdown, render_markdown, resolve_date_added, resolve_title,
+    FrontMatter,
 };
 pub use links::extract_link_targets;
 pub use syncthing::{
@@ -52,6 +53,8 @@ pub struct WikiPage {
     pub missing_at: Option<DateTime<Utc>>,
     pub title_cache: Option<String>,
     pub tags_cache: Vec<String>,
+    pub date_added_cache: Option<String>,
+    pub summary_cache: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -423,34 +426,30 @@ pub fn remove_wiki_root(db: &Db, id: Uuid) -> Result<()> {
 
 // --- Pages ------------------------------------------------------------------
 
+const PAGE_COLUMNS: &str = "id, root_id, rel_path, content_hash, mtime, indexed_at, missing_at, \
+    title_cache, tags_cache, date_added_cache, summary_cache, created_at, updated_at, deleted_at";
+
 pub fn list_wiki_pages(db: &Db, root_id: Option<Uuid>) -> Result<Vec<WikiPage>> {
     let conn = db.connection();
     let mut pages = Vec::new();
+    let order = "ORDER BY COALESCE(date_added_cache, created_at) DESC, mtime DESC, rel_path ASC";
 
     if let Some(root_id) = root_id {
-        let mut stmt = conn.prepare(
-            "
-            SELECT id, root_id, rel_path, content_hash, mtime, indexed_at, missing_at,
-                   title_cache, tags_cache, created_at, updated_at, deleted_at
-            FROM wiki_pages
-            WHERE deleted_at IS NULL AND missing_at IS NULL AND root_id = ?1
-            ORDER BY mtime DESC, updated_at DESC, rel_path ASC
-            ",
-        )?;
+        let sql = format!(
+            "SELECT {PAGE_COLUMNS} FROM wiki_pages \
+             WHERE deleted_at IS NULL AND missing_at IS NULL AND root_id = ?1 {order}"
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![root_id.to_string()], map_page_row)?;
         for row in rows {
             pages.push(page_from_row(row?)?);
         }
     } else {
-        let mut stmt = conn.prepare(
-            "
-            SELECT id, root_id, rel_path, content_hash, mtime, indexed_at, missing_at,
-                   title_cache, tags_cache, created_at, updated_at, deleted_at
-            FROM wiki_pages
-            WHERE deleted_at IS NULL AND missing_at IS NULL
-            ORDER BY mtime DESC, updated_at DESC, rel_path ASC
-            ",
-        )?;
+        let sql = format!(
+            "SELECT {PAGE_COLUMNS} FROM wiki_pages \
+             WHERE deleted_at IS NULL AND missing_at IS NULL {order}"
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([], map_page_row)?;
         for row in rows {
             pages.push(page_from_row(row?)?);
@@ -483,7 +482,8 @@ pub fn search_wiki_pages(db: &Db, query: &str) -> Result<Vec<WikiSearchHit>> {
     let mut stmt = conn.prepare(
         "
         SELECT p.id, p.root_id, p.rel_path, p.content_hash, p.mtime, p.indexed_at, p.missing_at,
-               p.title_cache, p.tags_cache, p.created_at, p.updated_at, p.deleted_at,
+               p.title_cache, p.tags_cache, p.date_added_cache, p.summary_cache,
+               p.created_at, p.updated_at, p.deleted_at,
                wiki_pages_fts.title, wiki_pages_fts.rel_path, wiki_pages_fts.tags, wiki_pages_fts.body,
                bm25(wiki_pages_fts)
         FROM wiki_pages_fts
@@ -496,11 +496,11 @@ pub fn search_wiki_pages(db: &Db, query: &str) -> Result<Vec<WikiSearchHit>> {
     let rows = stmt.query_map(params![match_query], |row| {
         Ok((
             map_page_row(row)?,
-            row.get::<_, String>(12)?,
-            row.get::<_, String>(13)?,
             row.get::<_, String>(14)?,
             row.get::<_, String>(15)?,
-            row.get::<_, f64>(16)?,
+            row.get::<_, String>(16)?,
+            row.get::<_, String>(17)?,
+            row.get::<_, f64>(18)?,
         ))
     })?;
 
@@ -930,17 +930,9 @@ fn build_fts_match_query(raw: &str) -> Option<String> {
 
 pub fn get_wiki_page(db: &Db, id: Uuid) -> Result<WikiPage> {
     let conn = db.connection();
+    let sql = format!("SELECT {PAGE_COLUMNS} FROM wiki_pages WHERE id = ?1 AND deleted_at IS NULL");
     let row = conn
-        .query_row(
-            "
-            SELECT id, root_id, rel_path, content_hash, mtime, indexed_at, missing_at,
-                   title_cache, tags_cache, created_at, updated_at, deleted_at
-            FROM wiki_pages
-            WHERE id = ?1 AND deleted_at IS NULL
-            ",
-            params![id.to_string()],
-            map_page_row,
-        )
+        .query_row(&sql, params![id.to_string()], map_page_row)
         .optional()?
         .ok_or_else(|| Error::Message(format!("wiki page not found: {id}")))?;
     page_from_row(row)
@@ -1006,7 +998,7 @@ pub fn create_wiki_page(db: &Db, input: CreateWikiPageInput) -> Result<WikiPageC
     let mut fm = FrontMatter {
         id: Some(Uuid::new_v4()),
         title: Some(title),
-        tags: input.tags.unwrap_or_default(),
+        tags: Vec::new(),
         ..FrontMatter::default()
     };
     ensure_identity(&mut fm, None);
@@ -1075,7 +1067,8 @@ pub fn list_backlinks(db: &Db, page_id: Uuid) -> Result<Vec<WikiBacklink>> {
         let mut stmt = conn.prepare(
             "
             SELECT p.id, p.root_id, p.rel_path, p.content_hash, p.mtime, p.indexed_at, p.missing_at,
-                   p.title_cache, p.tags_cache, p.created_at, p.updated_at, p.deleted_at, l.target_raw
+                   p.title_cache, p.tags_cache, p.date_added_cache, p.summary_cache,
+                   p.created_at, p.updated_at, p.deleted_at, l.target_raw
             FROM wiki_links l
             JOIN wiki_pages p ON p.id = l.source_page_id
             WHERE l.target_raw = ?1
@@ -1085,7 +1078,7 @@ pub fn list_backlinks(db: &Db, page_id: Uuid) -> Result<Vec<WikiBacklink>> {
             ",
         )?;
         let rows = stmt.query_map(params![target, page_id.to_string()], |row| {
-            Ok((map_page_row(row)?, row.get::<_, String>(12)?))
+            Ok((map_page_row(row)?, row.get::<_, String>(14)?))
         })?;
         for row in rows {
             let (page_row, target_raw) = row?;
@@ -1188,6 +1181,14 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
         .map(|fm| fm.tags.clone())
         .unwrap_or_default();
     let tags_json = serde_json::to_string(&tags)?;
+    let date_added = resolve_date_added(parsed.front_matter.as_ref());
+    let summary = parsed
+        .front_matter
+        .as_ref()
+        .and_then(|fm| fm.summary.as_ref())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
     let page_id = parsed
         .front_matter
         .as_ref()
@@ -1217,8 +1218,9 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
             "
             UPDATE wiki_pages
             SET content_hash = ?1, mtime = ?2, indexed_at = ?3, missing_at = NULL,
-                title_cache = ?4, tags_cache = ?5, updated_at = ?3
-            WHERE id = ?6
+                title_cache = ?4, tags_cache = ?5, date_added_cache = ?6, summary_cache = ?7,
+                updated_at = ?3
+            WHERE id = ?8
             ",
             params![
                 content_hash,
@@ -1226,6 +1228,8 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
                 now.to_rfc3339(),
                 title,
                 tags_json,
+                date_added,
+                summary,
                 existing_id
             ],
         )?;
@@ -1250,8 +1254,9 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
             "
             INSERT INTO wiki_pages (
                 id, root_id, rel_path, content_hash, mtime, indexed_at, missing_at,
-                title_cache, tags_cache, created_at, updated_at, deleted_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?6, ?6, NULL)
+                title_cache, tags_cache, date_added_cache, summary_cache,
+                created_at, updated_at, deleted_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9, ?10, ?6, ?6, NULL)
             ",
             params![
                 id.to_string(),
@@ -1261,7 +1266,9 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
                 mtime.to_rfc3339(),
                 now.to_rfc3339(),
                 title,
-                tags_json
+                tags_json,
+                date_added,
+                summary
             ],
         )?;
         (id, Some(WikiEventType::Created))
@@ -1336,13 +1343,12 @@ fn upsert_wiki_fts(
 
 fn find_page_by_rel(db: &Db, root_id: Uuid, rel_path: &str) -> Result<WikiPage> {
     let conn = db.connection();
+    let sql = format!(
+        "SELECT {PAGE_COLUMNS} FROM wiki_pages \
+         WHERE root_id = ?1 AND rel_path = ?2 AND deleted_at IS NULL"
+    );
     let row = conn.query_row(
-        "
-        SELECT id, root_id, rel_path, content_hash, mtime, indexed_at, missing_at,
-               title_cache, tags_cache, created_at, updated_at, deleted_at
-        FROM wiki_pages
-        WHERE root_id = ?1 AND rel_path = ?2 AND deleted_at IS NULL
-        ",
+        &sql,
         params![root_id.to_string(), rel_path],
         map_page_row,
     )?;
@@ -1512,6 +1518,8 @@ type PageRow = (
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<String>,
+    Option<String>,
     String,
     String,
     Option<String>,
@@ -1531,6 +1539,8 @@ fn map_page_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PageRow> {
         row.get(9)?,
         row.get(10)?,
         row.get(11)?,
+        row.get(12)?,
+        row.get(13)?,
     ))
 }
 
@@ -1545,6 +1555,8 @@ fn page_from_row(row: PageRow) -> Result<WikiPage> {
         missing_at,
         title_cache,
         tags_cache,
+        date_added_cache,
+        summary_cache,
         created_at,
         updated_at,
         deleted_at,
@@ -1563,6 +1575,8 @@ fn page_from_row(row: PageRow) -> Result<WikiPage> {
         missing_at: missing_at.as_deref().map(parse_dt).transpose()?,
         title_cache,
         tags_cache: tags,
+        date_added_cache,
+        summary_cache,
         created_at: parse_dt(&created_at)?,
         updated_at: parse_dt(&updated_at)?,
         deleted_at: deleted_at.as_deref().map(parse_dt).transpose()?,
