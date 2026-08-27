@@ -323,9 +323,13 @@ export async function apiRemoveWikiRoot(id: string): Promise<void> {
 
 export async function apiListWikiPages(rootId?: string): Promise<WikiPage[]> {
   if (!isTauri()) {
-    return mockStore.wikiPages.filter((p) =>
-      rootId ? p.root_id === rootId : true,
-    );
+    return mockStore.wikiPages
+      .filter((p) => (rootId ? p.root_id === rootId : true))
+      .sort((a, b) => {
+        const aKey = a.date_added_cache ?? a.created_at;
+        const bKey = b.date_added_cache ?? b.created_at;
+        return bKey.localeCompare(aKey);
+      });
   }
   return invoke<WikiPage[]>("list_wiki_pages_cmd", {
     rootId: rootId ?? null,
@@ -341,9 +345,11 @@ export async function apiSearchWikiPages(query: string): Promise<WikiSearchHit[]
 
 function mockSearchWikiPages(query: string): WikiSearchHit[] {
   const raw = query.trim();
-  const pages = [...mockStore.wikiPages].sort(
-    (a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime(),
-  );
+  const pages = [...mockStore.wikiPages].sort((a, b) => {
+    const aKey = a.date_added_cache ?? a.created_at;
+    const bKey = b.date_added_cache ?? b.created_at;
+    return new Date(bKey).getTime() - new Date(aKey).getTime();
+  });
   if (!raw) {
     return pages.map((page) => ({
       page,
@@ -483,7 +489,9 @@ export async function apiCreateWikiPage(input: {
       indexed_at: nowIso(),
       missing_at: null,
       title_cache: input.title ?? input.rel_path,
-      tags_cache: input.tags ?? [],
+      tags_cache: [],
+      date_added_cache: null,
+      summary_cache: null,
       created_at: nowIso(),
       updated_at: nowIso(),
       deleted_at: null,
@@ -495,7 +503,7 @@ export async function apiCreateWikiPage(input: {
       page,
       absolute_path: page.rel_path,
       content,
-      front_matter: { id: page.id, title: page.title_cache, tags: page.tags_cache },
+      front_matter: { id: page.id, title: page.title_cache, tags: [] },
       body: input.body ?? "",
     };
   }

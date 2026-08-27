@@ -77,6 +77,8 @@ export type WikiPage = {
   missing_at: string | null;
   title_cache: string | null;
   tags_cache: string[];
+  date_added_cache: string | null;
+  summary_cache: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -87,7 +89,13 @@ export type WikiFrontMatter = {
   title?: string | null;
   tags?: string[];
   summary?: string | null;
+  date?: string | null;
+  date_added?: string | null;
+  author?: string | null;
+  url?: string | null;
   source?: string | null;
+  references?: string[];
+  [key: string]: unknown;
 };
 
 export type WikiPageContent = {
