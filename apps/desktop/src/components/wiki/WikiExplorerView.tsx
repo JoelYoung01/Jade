@@ -1,5 +1,5 @@
 import * as React from "react";
-import { BookOpen, Folder, FolderPlus, Plus, RefreshCw, Search } from "lucide-react";
+import { BookOpen, Folder, Plus, RefreshCw, Search } from "lucide-react";
 
 import { WikiArticleGrid } from "@/components/wiki/WikiArticleGrid";
 import { WikiTopicSidebar } from "@/components/wiki/WikiTopicSidebar";

@@ -20,6 +20,8 @@ function page(partial: Partial<WikiPage> & Pick<WikiPage, "id" | "rel_path">): W
     missing_at: null,
     title_cache: null,
     tags_cache: [],
+    date_added_cache: null,
+    summary_cache: null,
     created_at: "",
     updated_at: "",
     deleted_at: null,
