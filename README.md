@@ -38,6 +38,16 @@ Until `jade-desktop-bin` is published on the AUR, use the AppImage (or build the
 
 A `.deb` is published on each release for manual install (desktop + `jade` CLI). Updates are not applied in-app for `.deb` installs (use your package manager or switch to the AppImage).
 
+### CLI-only (Linux / WSL)
+
+Quick install of `/usr/local/bin/jade` from the latest GitHub Release (works on Arch WSL without AUR):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JoelYoung01/Jade/main/scripts/install-cli.sh | bash -s -- -y
+```
+
+Or from a clone: `./scripts/install-cli.sh` (`--version 0.2.4`, `--prefix ~/.local`, `--full` for `dpkg -i`). See the script header for options.
+
 ## Setup (Windows development)
 
 1. **Node.js** 22+ and **pnpm via Corepack** (do not `npm i -g pnpm`)  
