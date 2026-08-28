@@ -1,7 +1,7 @@
 {
   "name": "jade",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @jade/desktop tauri:dev",
