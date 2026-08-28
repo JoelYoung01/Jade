@@ -4,6 +4,16 @@ Global: `--json`, `--db <path>`, `jade help`, `jade <topic…> help`.
 
 Prefer a **local** DB. Do not use `--db /mnt/c/...` to share the Windows Jade file from WSL — use `jade sync` instead.
 
+## Update
+
+```text
+jade update --check
+jade update --check --json
+jade update [-y|--yes]
+```
+
+Detects AUR / `.deb` / AppImage / Windows and updates that channel when possible.
+
 ## Tasks
 
 ```text

@@ -37,7 +37,8 @@ Linux GitHub Releases (`.deb` / AppImage) and AUR `jade-desktop-bin` ship the CL
 2. Pass **`--db <path>`** only when the user specifies a non-default **local** database. Never recommend `--db /mnt/c/...` for the Windows Jade DB (SQLite WAL breaks there).
 3. Default DB is the same file as the GUI on that OS: `app.jade.desktop/jade.db` under the OS user data directory. The GUI does not need to be running for CLI task/wiki commands.
 4. For multi-machine task sync, use `jade sync …` (or desktop **Peer sync**). See [docs/sync.md](../../../docs/sync.md).
-5. For flag details, run `jade help` or `jade <topic> help` — do not invent flags.
+5. To update a packaged CLI install: `jade update --check` / `jade update`.
+6. For flag details, run `jade help` or `jade <topic> help` — do not invent flags.
 
 See also [references/cli-cheatsheet.md](../../references/cli-cheatsheet.md).
 
@@ -70,6 +71,15 @@ Notes:
 | Listen + loop | `jade sync serve [--bind 0.0.0.0:7421] [--token …]` |
 
 Wiki stays local; use Syncthing for markdown folders if needed.
+
+### Self-update
+
+| Goal | Command |
+| --- | --- |
+| Check only | `jade update --check [--json]` |
+| Install | `jade update [-y]` |
+
+Detects AUR / `.deb` / AppImage. Windows CLI packaging is not supported yet.
 
 ### Wiki
 
