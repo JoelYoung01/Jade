@@ -6,9 +6,13 @@ import { applyDuePreset, type DueQuickPreset } from "@/lib/time";
 import type {
   CreateTaskInput,
   LaneVisibility,
+  PeerSyncSettings,
+  PeerSyncStatus,
   RescheduleMode,
   Settings,
   StatusUpdateResult,
+  SyncPeer,
+  SyncReport,
   SyncthingSettings,
   SyncthingStatus,
   Tag,
@@ -46,6 +50,7 @@ const mockStore: MockStore = {
   settings: {
     lane_visibility: { inactive: true, active: true, complete: false },
     syncthing: { address: "http://127.0.0.1:8384", api_key: "" },
+    peer_sync: { enabled: false, bind: "0.0.0.0:7421", token: "" },
   },
   wikiRoots: [],
   wikiPages: [],
@@ -283,6 +288,53 @@ export async function apiSetSyncthingSettings(
     return structuredClone(mockStore.settings);
   }
   return invoke<Settings>("set_syncthing_settings_cmd", { settings });
+}
+
+export async function apiGetPeerSyncStatus(): Promise<PeerSyncStatus> {
+  if (!isTauri()) {
+    return {
+      device: {
+        device_id: "00000000-0000-0000-0000-000000000001",
+        display_name: "dev",
+        created_at: nowIso(),
+      },
+      peers: [],
+      settings: { ...mockStore.settings.peer_sync },
+      listening: false,
+    };
+  }
+  return invoke<PeerSyncStatus>("get_peer_sync_status_cmd");
+}
+
+export async function apiSetPeerSyncSettings(
+  settings: PeerSyncSettings,
+): Promise<PeerSyncStatus> {
+  if (!isTauri()) {
+    mockStore.settings.peer_sync = settings;
+    return apiGetPeerSyncStatus();
+  }
+  return invoke<PeerSyncStatus>("set_peer_sync_settings_cmd", { settings });
+}
+
+export async function apiPairPeer(url: string, token: string): Promise<SyncPeer> {
+  if (!isTauri()) {
+    throw new Error("Pairing requires the Jade desktop app");
+  }
+  return invoke<SyncPeer>("pair_peer_cmd", { url, token });
+}
+
+export async function apiSyncNow(): Promise<SyncReport> {
+  if (!isTauri()) {
+    return { peers: [] };
+  }
+  return invoke<SyncReport>("sync_now_cmd");
+}
+
+export async function apiGeneratePeerSyncToken(): Promise<string> {
+  if (!isTauri()) {
+    return crypto.randomUUID().replace(/-/g, "");
+  }
+  return invoke<string>("generate_peer_sync_token_cmd");
 }
 
 export async function apiListWikiRoots(): Promise<WikiRoot[]> {

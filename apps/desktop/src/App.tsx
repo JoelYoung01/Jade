@@ -13,6 +13,7 @@ import {
 
 import { AppShell } from "@/components/AppShell";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
+import { PeerSyncDialog } from "@/components/PeerSyncDialog";
 import { TaskBoard } from "@/components/TaskBoard";
 import { TaskDragPreview, type ReschedulePreset } from "@/components/TaskCard";
 import { UpdateDialog } from "@/components/UpdateDialog";
@@ -63,6 +64,7 @@ export default function App(): React.JSX.Element {
     complete: false,
   });
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [peerSyncOpen, setPeerSyncOpen] = React.useState(false);
   const [editingTask, setEditingTask] = React.useState<Task | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -368,6 +370,7 @@ export default function App(): React.JSX.Element {
         onCheckForUpdates={() => {
           void checkManually();
         }}
+        onOpenPeerSync={() => setPeerSyncOpen(true)}
         updateChecking={updateChecking}
       >
         {view === "wiki" ? (
@@ -464,6 +467,8 @@ export default function App(): React.JSX.Element {
         }}
         onDismiss={dismissPrompt}
       />
+
+      <PeerSyncDialog open={peerSyncOpen} onOpenChange={setPeerSyncOpen} />
     </TooltipProvider>
   );
 }

@@ -33,6 +33,7 @@ thiserror = { workspace = true }
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 ureq = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 
 [features]
 default = ["custom-protocol"]

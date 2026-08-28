@@ -52,9 +52,54 @@ export type SyncthingSettings = {
   api_key: string;
 };
 
+export type PeerSyncSettings = {
+  enabled: boolean;
+  bind: string;
+  token: string;
+};
+
 export type Settings = {
   lane_visibility: LaneVisibility;
   syncthing: SyncthingSettings;
+  peer_sync: PeerSyncSettings;
+};
+
+export type SyncDevice = {
+  device_id: string;
+  display_name: string;
+  created_at: string;
+};
+
+export type SyncPeer = {
+  peer_device_id: string;
+  base_url: string;
+  token: string;
+  last_pulled_seq: number;
+  last_push_ack: number;
+  enabled: boolean;
+  last_sync_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PeerSyncStatus = {
+  device: SyncDevice;
+  peers: SyncPeer[];
+  settings: PeerSyncSettings;
+  listening: boolean;
+};
+
+export type PeerSyncResult = {
+  peer_device_id: string;
+  pulled: number;
+  pushed: number;
+  skipped: number;
+  error: string | null;
+};
+
+export type SyncReport = {
+  peers: PeerSyncResult[];
 };
 
 export type WikiRoot = {

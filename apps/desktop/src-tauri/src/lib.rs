@@ -1,4 +1,5 @@
 mod install_context;
+mod peer_sync;
 mod wiki_watch;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,27 +15,29 @@ use install_context::{
 use chrono::{DateTime, Utc};
 use jade_core::{
     add_wiki_root, count_tasks_with_tag, create_task, create_wiki_page, data_version,
-    default_db_path, delete_tag, delete_task, ensure_tag, get_settings, get_wiki_page,
-    latest_event_seq, list_backlinks, list_tags, list_task_events_since, list_tasks,
+    default_db_path, delete_tag, delete_task, ensure_tag, generate_token, get_settings,
+    get_wiki_page, latest_event_seq, list_backlinks, list_tags, list_task_events_since, list_tasks,
     list_wiki_pages, list_wiki_roots, open_db, read_wiki_page, reindex_all, reindex_root,
     remove_wiki_root, reschedule_task, search_wiki_pages, set_lane_visibility,
     set_syncthing_settings, status_for_path, update_task, update_task_status, write_wiki_page,
     AddWikiRootInput, CreateTaskInput, CreateWikiPageInput, Db, DueUpdate, LaneVisibility,
-    ListTaskEventsSinceInput, RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult,
-    SyncthingClientConfig, SyncthingSettings, SyncthingStatus, Tag, Task, TaskEvent, TaskStatus,
-    UpdateTaskInput, UpdateTaskStatusInput, WikiBacklink, WikiPage, WikiPageContent, WikiRoot,
-    WikiSearchHit, WriteWikiPageInput,
+    ListTaskEventsSinceInput, PeerSyncSettings, RepeatCronUpdate, RescheduleMode, Settings,
+    StatusUpdateResult, SyncPeer, SyncReport, SyncthingClientConfig, SyncthingSettings,
+    SyncthingStatus, Tag, Task, TaskEvent, TaskStatus, UpdateTaskInput, UpdateTaskStatusInput,
+    WikiBacklink, WikiPage, WikiPageContent, WikiRoot, WikiSearchHit, WriteWikiPageInput,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
+use peer_sync::{PeerSyncRuntime, PeerSyncStatus};
 use wiki_watch::{spawn_wiki_watcher, WikiWatchState};
 
 pub(crate) struct AppState {
     pub(crate) db: Db,
     wiki_watch: Arc<WikiWatchState>,
+    peer_sync: Arc<PeerSyncRuntime>,
 }
 
 #[derive(Clone, Serialize)]
@@ -215,6 +218,40 @@ fn set_syncthing_settings_cmd(
     settings: SyncthingSettings,
 ) -> Result<Settings, String> {
     set_syncthing_settings(&state.db, settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_peer_sync_status_cmd(
+    state: tauri::State<'_, AppState>,
+) -> Result<PeerSyncStatus, String> {
+    peer_sync::status(&state.db, &state.peer_sync)
+}
+
+#[tauri::command]
+fn set_peer_sync_settings_cmd(
+    state: tauri::State<'_, AppState>,
+    settings: PeerSyncSettings,
+) -> Result<PeerSyncStatus, String> {
+    peer_sync::apply_settings(&state.db, &state.peer_sync, settings)
+}
+
+#[tauri::command]
+fn pair_peer_cmd(
+    state: tauri::State<'_, AppState>,
+    url: String,
+    token: String,
+) -> Result<SyncPeer, String> {
+    peer_sync::pair(&state.db, &url, &token)
+}
+
+#[tauri::command]
+fn sync_now_cmd(state: tauri::State<'_, AppState>) -> Result<SyncReport, String> {
+    peer_sync::sync_now(&state.db)
+}
+
+#[tauri::command]
+fn generate_peer_sync_token_cmd() -> String {
+    generate_token()
 }
 
 #[derive(Debug, Deserialize)]
@@ -446,6 +483,9 @@ pub fn run() {
     let wiki_watch = Arc::new(WikiWatchState::new());
     let wiki_watch_for_setup = Arc::clone(&wiki_watch);
     let wiki_watch_for_exit = Arc::clone(&wiki_watch);
+    let peer_sync = Arc::new(PeerSyncRuntime::new());
+    let peer_sync_for_setup = Arc::clone(&peer_sync);
+    let peer_sync_for_exit = Arc::clone(&peer_sync);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -455,9 +495,16 @@ pub fn run() {
         .setup(move |app| {
             let path = default_db_path().map_err(|e| e.to_string())?;
             let db = open_db(&path).map_err(|e| e.to_string())?;
+            let peer_settings = get_settings(&db)
+                .map_err(|e| e.to_string())?
+                .peer_sync;
+            if peer_settings.enabled {
+                peer_sync_for_setup.start(&peer_settings)?;
+            }
             app.manage(AppState {
                 db,
                 wiki_watch: Arc::clone(&wiki_watch_for_setup),
+                peer_sync: Arc::clone(&peer_sync_for_setup),
             });
             spawn_data_version_watcher(app.handle().clone(), watcher_flag);
             spawn_wiki_watcher(app.handle().clone(), wiki_watch_for_setup);
@@ -467,6 +514,7 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 watcher_running.store(false, Ordering::Relaxed);
                 wiki_watch_for_exit.stop();
+                peer_sync_for_exit.stop();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -487,6 +535,11 @@ pub fn run() {
             get_settings_cmd,
             set_lane_visibility_cmd,
             set_syncthing_settings_cmd,
+            get_peer_sync_status_cmd,
+            set_peer_sync_settings_cmd,
+            pair_peer_cmd,
+            sync_now_cmd,
+            generate_peer_sync_token_cmd,
             list_task_events_since_cmd,
             latest_event_seq_cmd,
             list_wiki_roots_cmd,
