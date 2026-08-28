@@ -1,6 +1,6 @@
 [package]
 name = "jade-desktop"
-version = "0.2.4"
+version = "0.2.5"
 description = "Jade desktop shell"
 authors = ["you"]
 edition.workspace = true
