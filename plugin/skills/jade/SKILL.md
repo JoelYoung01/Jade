@@ -79,7 +79,7 @@ Wiki stays local; use Syncthing for markdown folders if needed.
 | Check only | `jade update --check [--json]` |
 | Install | `jade update [-y]` |
 
-Detects AUR / `.deb` / AppImage. Windows CLI packaging is not supported yet.
+Detects AUR / `.deb` / CLI script (`install-cli.sh`) / AppImage. Unknown installs can confirm running the install script. Windows CLI packaging is not supported yet.
 
 ### Wiki
 

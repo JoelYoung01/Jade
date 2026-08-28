@@ -94,9 +94,10 @@ OPTIONS
 CHANNELS
   aur         yay -S --needed jade-desktop-bin
   deb         Download GitHub .deb and sudo dpkg -i
+  cliScript   Re-extract jade from release .deb (install-cli.sh installs)
   appImage    Download a new AppImage beside the current one
   windows     Not supported for CLI yet (desktop updater / Releases)
-  unknown     Dev or unpackaged binary — print guidance
+  unknown     Prompt to run scripts/install-cli.sh (with confirmation)
 
 EXAMPLES
   jade update --check
@@ -104,6 +105,7 @@ EXAMPLES
   jade update -y
 
 NOTES
+  Script installs write PREFIX/share/jade/install-method so updates stay on that channel.
   Prefer a local DB + peer sync across machines; do not share jade.db over /mnt/c.
 ";
 

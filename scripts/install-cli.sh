@@ -9,8 +9,8 @@
 #   ./scripts/install-cli.sh --full          # Linux: install .deb (desktop + CLI) via dpkg
 #   ./scripts/install-cli.sh --prefix ~/.local
 #
-# Default (Linux): download the amd64 .deb, extract usr/bin/jade, install to PREFIX/bin.
-# That works on Debian/Ubuntu, Arch/WSL, etc. without needing the AUR package published.
+# Default (Linux): download the amd64 .deb, extract usr/bin/jade, install to PREFIX/bin,
+# and write PREFIX/share/jade/install-method so `jade update` can find this channel.
 
 set -euo pipefail
 
@@ -144,13 +144,30 @@ extract_jade_from_deb() {
 install_file() {
   local src="$1"
   local dest="$2"
-  mkdir -p "$(dirname "$dest")"
-  if [[ -w "$(dirname "$dest")" ]]; then
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || true
+  if [[ -w "$(dirname "$dest")" ]] || [[ -w "$dest" ]]; then
     install -m 755 "$src" "$dest"
   else
     need_cmd sudo
+    sudo mkdir -p "$(dirname "$dest")"
     sudo install -m 755 "$src" "$dest"
   fi
+}
+
+write_install_marker() {
+  local ver="$1"
+  local marker_dir="$PREFIX/share/jade"
+  local marker="$marker_dir/install-method"
+  local body
+  body="$(printf '{\n  "channel": "cli-script",\n  "version": "%s",\n  "prefix": "%s"\n}\n' "$ver" "$PREFIX")"
+  if mkdir -p "$marker_dir" 2>/dev/null && [[ -w "$marker_dir" ]]; then
+    printf '%s' "$body" >"$marker"
+  else
+    need_cmd sudo
+    sudo mkdir -p "$marker_dir"
+    printf '%s' "$body" | sudo tee "$marker" >/dev/null
+  fi
+  log "Wrote install marker $marker (jade update uses this)"
 }
 
 confirm() {
@@ -184,8 +201,9 @@ install_linux_cli_only() {
   log "Install $tmp/root/usr/bin/jade → $target"
   confirm "Continue?" || die "aborted"
   install_file "$tmp/root/usr/bin/jade" "$target"
+  write_install_marker "$ver"
   log "Installed $($target -v 2>/dev/null || echo "jade $ver")"
-  log "Try: jade help"
+  log "Try: jade help && jade update --check"
 }
 
 install_linux_full_deb() {

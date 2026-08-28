@@ -6,7 +6,13 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { openExternalUrl } from "@/lib/openExternal";
 import { isTauriRuntime } from "@/lib/runtime";
 
-export type InstallKind = "windows" | "appImage" | "aur" | "deb" | "unknown";
+export type InstallKind =
+  | "windows"
+  | "appImage"
+  | "aur"
+  | "deb"
+  | "cliScript"
+  | "unknown";
 
 export type InstallContext = {
   kind: InstallKind;

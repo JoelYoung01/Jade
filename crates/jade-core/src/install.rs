@@ -23,6 +23,8 @@ pub enum InstallKind {
     AppImage,
     Aur,
     Deb,
+    /// Installed via `scripts/install-cli.sh` (CLI-only from GitHub `.deb`).
+    CliScript,
     Unknown,
 }
 
@@ -33,9 +35,23 @@ impl InstallKind {
             Self::AppImage => "appImage",
             Self::Aur => "aur",
             Self::Deb => "deb",
+            Self::CliScript => "cliScript",
             Self::Unknown => "unknown",
         }
     }
+}
+
+/// Relative to an install prefix (`/usr/local`, `~/.local`, …).
+pub const CLI_SCRIPT_MARKER_REL: &str = "share/jade/install-method";
+pub const CLI_SCRIPT_CHANNEL: &str = "cli-script";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CliScriptMarker {
+    pub channel: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub prefix: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,7 +176,92 @@ fn classify_linux_package_owned(exe: &Path) -> (InstallKind, Option<String>) {
     if let Some(pkg) = dpkg_owner(&resolved) {
         return (InstallKind::Deb, Some(pkg));
     }
+    if is_cli_script_install(&resolved) {
+        return (InstallKind::CliScript, None);
+    }
     (InstallKind::Unknown, None)
+}
+
+/// Prefix for `$prefix/bin/jade` → `$prefix`.
+pub fn prefix_from_jade_exe(exe: &Path) -> Option<PathBuf> {
+    let file_name = exe.file_name()?.to_str()?;
+    if file_name != "jade" && file_name != "jade.exe" {
+        return None;
+    }
+    let bin_dir = exe.parent()?;
+    if bin_dir.file_name()?.to_str()? != "bin" {
+        return None;
+    }
+    Some(bin_dir.parent()?.to_path_buf())
+}
+
+pub fn cli_script_marker_path(prefix: &Path) -> PathBuf {
+    prefix.join(CLI_SCRIPT_MARKER_REL)
+}
+
+pub fn read_cli_script_marker(prefix: &Path) -> Option<CliScriptMarker> {
+    let path = cli_script_marker_path(prefix);
+    let raw = std::fs::read_to_string(path).ok()?;
+    let trimmed = raw.trim();
+    if trimmed == CLI_SCRIPT_CHANNEL || trimmed == "cliScript" {
+        return Some(CliScriptMarker {
+            channel: CLI_SCRIPT_CHANNEL.into(),
+            version: None,
+            prefix: Some(prefix.display().to_string()),
+        });
+    }
+    serde_json::from_str(trimmed).ok().or_else(|| {
+        if trimmed.contains(CLI_SCRIPT_CHANNEL) {
+            Some(CliScriptMarker {
+                channel: CLI_SCRIPT_CHANNEL.into(),
+                version: None,
+                prefix: Some(prefix.display().to_string()),
+            })
+        } else {
+            None
+        }
+    })
+}
+
+/// Write the install-method marker used by `jade update` for script installs.
+pub fn write_cli_script_marker(prefix: &Path, version: &str) -> Result<(), String> {
+    let path = cli_script_marker_path(prefix);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+    }
+    let marker = CliScriptMarker {
+        channel: CLI_SCRIPT_CHANNEL.into(),
+        version: Some(version.trim_start_matches('v').to_string()),
+        prefix: Some(prefix.display().to_string()),
+    };
+    let body = serde_json::to_string_pretty(&marker).map_err(|e| e.to_string())?;
+    std::fs::write(&path, format!("{body}\n")).map_err(|e| format!("write {}: {e}", path.display()))
+}
+
+#[cfg_attr(windows, allow(dead_code))]
+fn is_cli_script_install(exe: &Path) -> bool {
+    let Some(prefix) = prefix_from_jade_exe(exe) else {
+        return false;
+    };
+    if read_cli_script_marker(&prefix).is_some() {
+        return true;
+    }
+    // Heuristic for installs before the marker existed.
+    heuristic_cli_script_prefix(&prefix)
+}
+
+#[cfg_attr(windows, allow(dead_code))]
+fn heuristic_cli_script_prefix(prefix: &Path) -> bool {
+    if prefix == Path::new("/usr/local") {
+        return true;
+    }
+    if let Ok(home) = env::var("HOME") {
+        let local = PathBuf::from(home).join(".local");
+        if prefix == local {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(not(windows))]
@@ -432,5 +533,29 @@ mod tests {
     fn asset_urls() {
         assert!(deb_download_url("0.2.2").ends_with("Jade_0.2.2_amd64.deb"));
         assert!(appimage_download_url("v0.2.2").contains("Jade_0.2.2_amd64.AppImage"));
+    }
+
+    #[test]
+    fn prefix_from_bin_jade() {
+        let exe = Path::new("/usr/local/bin/jade");
+        assert_eq!(
+            prefix_from_jade_exe(exe).as_deref(),
+            Some(Path::new("/usr/local"))
+        );
+        assert!(prefix_from_jade_exe(Path::new("/opt/jade")).is_none());
+    }
+
+    #[test]
+    fn marker_roundtrip() {
+        let prefix = std::env::temp_dir().join(format!(
+            "jade-marker-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&prefix);
+        write_cli_script_marker(&prefix, "0.2.5").unwrap();
+        let marker = read_cli_script_marker(&prefix).unwrap();
+        assert_eq!(marker.channel, CLI_SCRIPT_CHANNEL);
+        assert_eq!(marker.version.as_deref(), Some("0.2.5"));
+        let _ = std::fs::remove_dir_all(&prefix);
     }
 }

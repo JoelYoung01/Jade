@@ -12,7 +12,8 @@ jade update --check --json
 jade update [-y|--yes]
 ```
 
-Detects AUR / `.deb` / AppImage / Windows and updates that channel when possible.
+Detects AUR / `.deb` / CLI script install / AppImage / Windows and updates that channel when possible.
+Unknown installs can opt into `scripts/install-cli.sh` with confirmation.
 
 ## Tasks
 
