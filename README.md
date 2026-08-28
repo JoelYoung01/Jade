@@ -66,6 +66,10 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 
 (Private key is never committed; CI uses GitHub Actions secrets.)
 
+## Agent plugin
+
+Agents can install a portable plugin that teaches the `jade` CLI (tasks + wiki) and Jade’s local-first architecture. Package lives in [`plugin/`](./plugin/) — see [`plugin/README.md`](./plugin/README.md) for Cursor, Claude Code, and Agent Plugins 1.0 install notes.
+
 ## Local development
 
 Commands live in the [`justfile`](./justfile) — use that as the source of truth (`just --list`).

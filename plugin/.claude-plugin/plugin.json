@@ -1,0 +1,12 @@
+{
+  "name": "jade",
+  "version": "0.1.0",
+  "description": "Use Jade — local-first tasks and wiki — via the jade CLI.",
+  "author": {
+    "name": "Joel Young"
+  },
+  "homepage": "https://github.com/JoelYoung01/Jade",
+  "repository": "https://github.com/JoelYoung01/Jade",
+  "license": "MIT",
+  "keywords": ["jade", "tasks", "wiki", "local-first", "cli"]
+}

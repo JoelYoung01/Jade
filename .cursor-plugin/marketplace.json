@@ -1,0 +1,16 @@
+{
+  "name": "jade-plugins",
+  "owner": {
+    "name": "Joel Young"
+  },
+  "metadata": {
+    "description": "Jade agent plugins — local-first tasks and wiki via the jade CLI"
+  },
+  "plugins": [
+    {
+      "name": "jade",
+      "source": "plugin",
+      "description": "Use Jade — local-first tasks and wiki — via the jade CLI."
+    }
+  ]
+}
