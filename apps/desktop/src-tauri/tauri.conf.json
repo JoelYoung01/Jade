@@ -7,6 +7,7 @@
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
+    "beforeBundleCommand": "node ../../scripts/prepare-bundle-cli.mjs",
     "frontendDist": "../dist"
   },
   "app": {
@@ -38,7 +39,19 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/bin/jade": "../../../target/release/jade"
+        }
+      },
+      "appimage": {
+        "files": {
+          "/usr/bin/jade": "../../../target/release/jade"
+        }
+      }
+    }
   },
   "plugins": {
     "updater": {

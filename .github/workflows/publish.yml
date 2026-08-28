@@ -63,6 +63,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build jade CLI for Linux packages
+        if: matrix.platform == 'ubuntu-22.04'
+        run: cargo build -p jade-cli --release
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0
         env:
@@ -78,10 +82,10 @@ jobs:
 
             - **Windows:** download the `*-setup.exe` installer (in-app updates)
             - **Linux (portable):** download the `.AppImage` (in-app updates while running as AppImage)
-            - **Arch / EndeavourOS:** prefer AUR `jade-desktop-bin` (see `packaging/aur/jade-desktop-bin`); update with `yay`
-            - **Debian/Ubuntu:** `.deb` is available for manual install (no in-app overwrite)
+            - **Arch / EndeavourOS:** prefer AUR `jade-desktop-bin` (see `packaging/aur/jade-desktop-bin`); update with `yay` — installs desktop + `jade` CLI on PATH
+            - **Debian/Ubuntu:** `.deb` is available for manual install (desktop + `jade` CLI; no in-app overwrite)
 
-            Windows builds are unsigned (SmartScreen may warn).
+            Windows builds are unsigned (SmartScreen may warn). The Windows installer does not yet ship the `jade` CLI.
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: false

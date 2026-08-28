@@ -18,7 +18,7 @@ After install, Jade checks for updates on startup. You can also use the app menu
 1. Download the `.AppImage` from [GitHub Releases](https://github.com/JoelYoung01/Jade/releases).
 2. `chmod +x Jade_*.AppImage` and run it.
 
-While Jade is running as an AppImage, **Check for updates** can download and replace that AppImage in place (signed updater artifacts).
+While Jade is running as an AppImage, **Check for updates** can download and replace that AppImage in place (signed updater artifacts). The AppImage also embeds the `jade` CLI inside its filesystem (not installed onto the host `PATH` unless you use the `.deb` / AUR package).
 
 ### Arch / EndeavourOS (AUR)
 
@@ -28,13 +28,15 @@ Prefer the binary AUR package (recipe lives in [`packaging/aur/jade-desktop-bin`
 yay -S jade-desktop-bin
 ```
 
+That install includes the desktop app **and** the `jade` CLI on `PATH`. In Arch WSL you can use the same package for the CLI and pass `--db` to share a Windows Jade database if needed.
+
 In-app **Check for updates** detects an AUR install and can open Konsole with a targeted `yay -S --needed jade-desktop-bin` command. Jade will not overwrite pacman-owned files itself.
 
 Until `jade-desktop-bin` is published on the AUR, use the AppImage (or build the PKGBUILD locally — see that folder’s README).
 
 ### Debian / Ubuntu (`.deb`)
 
-A `.deb` is published on each release for manual install. Updates are not applied in-app for `.deb` installs (use your package manager or switch to the AppImage).
+A `.deb` is published on each release for manual install (desktop + `jade` CLI). Updates are not applied in-app for `.deb` installs (use your package manager or switch to the AppImage).
 
 ## Setup (Windows development)
 

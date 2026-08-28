@@ -159,6 +159,7 @@ Expect at minimum:
 - `Jade_<version>_amd64.AppImage` + `.sig`
 - `Jade_<version>_amd64.deb` + `.sig`
 - **`latest.json`** ← required for in-app updates; without it users see *"Could not fetch a valid release JSON from the remote"*
+- **Linux `.deb`** should include `/usr/bin/jade` (CLI). After a release, optionally download the `.deb` and confirm: `dpkg-deb -c Jade_*.deb | findstr jade` (or `grep` on Linux)
 
 ### Validate latest.json
 

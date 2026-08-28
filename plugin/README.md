@@ -17,12 +17,12 @@ Agents shell out to `jade … --json`. The desktop app and CLI share one SQLite 
 
 | How you got Jade | How to run the CLI |
 | --- | --- |
+| Arch / EndeavourOS AUR (`jade-desktop-bin`) | `jade` on `PATH` |
+| Linux `.deb` from Releases | `jade` on `PATH` |
 | Developing this repo | `just cli <args>` or `cargo run -p jade-cli -- <args>` |
-| `jade` on `PATH` | `jade <args>` |
+| Windows desktop installer | CLI not bundled yet — build from source |
 
-GitHub Releases currently ship the **desktop** installer. A standalone CLI binary is not published yet — build from source if `jade` is not on your PATH.
-
-Default database: `app.jade.desktop/jade.db` under the OS user data directory. Override with `--db <path>`.
+Default database: `app.jade.desktop/jade.db` under the OS user data directory. Override with `--db <path>` (e.g. from WSL to a Windows install: `/mnt/c/Users/<you>/AppData/Roaming/app.jade.desktop/jade.db`).
 
 ## Install
 

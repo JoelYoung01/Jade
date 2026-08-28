@@ -25,9 +25,10 @@ Prefer the architecture skill (`jade-architecture`) when diagnosing sync, concur
 | Context | Command |
 | --- | --- |
 | This repo (dev) | `just cli <args>` or `cargo run -p jade-cli -- <args>` |
-| Binary on PATH | `jade <args>` |
+| Linux desktop / AUR / `.deb` install | `jade <args>` (`/usr/bin/jade` from the package) |
+| Binary on PATH (other) | `jade <args>` |
 
-Releases ship the desktop installer; a standalone CLI binary may not be on PATH until built from source.
+Linux GitHub Releases (`.deb` / AppImage) and AUR `jade-desktop-bin` ship the CLI alongside the desktop app. The Windows installer does not yet include `jade`; use a local build there (`just cli` / `cargo run -p jade-cli`).
 
 ## Agent conventions
 

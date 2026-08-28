@@ -13,7 +13,7 @@
 pkgname=jade-desktop-bin
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Local-first personal software (tasks + wiki) — prebuilt binary"
+pkgdesc="Local-first personal software (desktop + jade CLI) — prebuilt binary"
 arch=('x86_64')
 url="https://github.com/JoelYoung01/Jade"
 license=('MIT')
@@ -28,8 +28,8 @@ depends=(
   'pango'
   'webkit2gtk-4.1'
 )
-provides=('jade-desktop')
-conflicts=('jade-desktop' 'jade-desktop-git')
+provides=('jade-desktop' 'jade-cli')
+conflicts=('jade-desktop' 'jade-desktop-git' 'jade-cli')
 options=('!strip' '!debug')
 install="${pkgname}.install"
 source_x86_64=(

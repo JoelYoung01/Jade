@@ -1,12 +1,26 @@
 # AUR: `jade-desktop-bin`
 
-Binary AUR package that installs the Linux `.deb` published by Jade’s GitHub Releases workflow.
+Binary AUR package that installs the official `.deb` from Jade’s GitHub Releases workflow.
+
+The `.deb` includes:
+
+- Desktop app (`jade-desktop` / desktop entry)
+- **`jade` CLI on `PATH`** (`/usr/bin/jade`) — same binary agents and terminals use
 
 On Arch / EndeavourOS, prefer updating with yay (the desktop app can open Konsole with this command):
 
 ```bash
 yay -S --needed jade-desktop-bin
 ```
+
+After install:
+
+```bash
+jade help
+jade tasks list --json
+```
+
+WSL note: installing this package in Arch WSL gives you the CLI (and desktop deps). Point at a Windows Jade database with `--db`, e.g. `/mnt/c/Users/<you>/AppData/Roaming/app.jade.desktop/jade.db`.
 
 Do not use the AppImage in-app updater against a pacman-owned install — Jade detects AUR installs and routes updates through yay instead.
 
@@ -50,3 +64,5 @@ sha256sum "Jade_${pkgver}_amd64.deb"
 4. In the AUR git clone: copy files, `makepkg --printsrcinfo > .SRCINFO`, commit, push.
 
 If the `.deb` asset name from `tauri-action` differs, update the `source_x86_64` URL to match the release asset exactly.
+
+After updating, smoke-check the CLI from the installed package: `jade help`.
