@@ -1,6 +1,7 @@
 pub fn lookup(key: &str) -> Option<&'static str> {
     match key {
         "" => Some(ROOT),
+        "update" => Some(UPDATE),
         "tasks" => Some(TASKS),
         "tasks list" => Some(TASKS_LIST),
         "tasks add" => Some(TASKS_ADD),
@@ -30,6 +31,8 @@ USAGE
 FEATURES
   tasks    Task tracking CRUD
   wiki     Filesystem markdown wiki index
+  sync     LAN peer sync for tasks
+  update   Check / install Jade updates for this install
 
 GLOBAL OPTIONS
   --db <path>   Use a specific SQLite database (default: app data dir)
@@ -47,9 +50,12 @@ EXAMPLES
   jade wiki roots add ./notes
   jade wiki list
   jade wiki search \"recipes\"
+  jade sync status
+  jade update --check
 
 HELP TOPICS
   jade help
+  jade update help
   jade tasks help
   jade tasks add help
   jade tasks update help
@@ -67,6 +73,37 @@ HELP TOPICS
 NOTES
   The GUI does not need to be running. The CLI opens the same SQLite file
   as the desktop app (app.jade.desktop/jade.db under your user data dir).
+";
+
+const UPDATE: &str = "\
+jade update — check and install Jade updates
+
+PURPOSE
+  Detect how this `jade` binary was installed (AUR, .deb, AppImage, …),
+  compare against that channel's latest version, and optionally install.
+
+USAGE
+  jade update [--check] [--yes|-y] [--json]
+
+OPTIONS
+  --check     Report only; do not download or install
+  -y, --yes   Skip confirmation (AUR: yay --noconfirm)
+  --json      Machine-readable status
+
+CHANNELS
+  aur         yay -S --needed jade-desktop-bin
+  deb         Download GitHub .deb and sudo dpkg -i
+  appImage    Download a new AppImage beside the current one
+  windows     Not supported for CLI yet (desktop updater / Releases)
+  unknown     Dev or unpackaged binary — print guidance
+
+EXAMPLES
+  jade update --check
+  jade update --check --json
+  jade update -y
+
+NOTES
+  Prefer a local DB + peer sync across machines; do not share jade.db over /mnt/c.
 ";
 
 const TASKS: &str = "\

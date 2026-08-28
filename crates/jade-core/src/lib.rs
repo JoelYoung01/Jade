@@ -4,6 +4,7 @@ mod cron;
 mod db;
 mod error;
 mod events;
+mod install;
 mod models;
 mod settings;
 mod sync;
@@ -16,6 +17,13 @@ pub use cron::{next_occurrence, normalize_cron, parse_cron};
 pub use db::{data_version, default_db_path, open_db, open_default_db, Db, APP_DATA_DIR_NAME};
 pub use error::{Error, Result};
 pub use events::{latest_event_seq, list_task_events, list_task_events_since};
+pub use install::{
+    appimage_download_url, command_exists, deb_download_url, detect_install_context,
+    detect_install_context_for, download_to_temp, fetch_aur_package_info, fetch_latest_release,
+    is_newer_version, latest_appimage_download_url, open_aur_update_in_konsole, strip_pkgrel,
+    windows_setup_download_url, AurPackageInfo, InstallContext, InstallKind, LatestReleaseInfo,
+    AUR_PACKAGE_NAME, GITHUB_RELEASES_URL, LATEST_JSON_URL,
+};
 pub use models::{
     CreateTaskInput, DueUpdate, LaneVisibility, ListTaskEventsInput, ListTaskEventsSinceInput,
     PeerSyncSettings, RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult,

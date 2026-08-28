@@ -4,6 +4,7 @@ mod help;
 mod output;
 mod sync;
 mod tasks;
+mod update;
 mod wiki;
 
 use std::path::PathBuf;
@@ -54,6 +55,15 @@ enum Commands {
         #[command(subcommand)]
         command: SyncCommand,
     },
+    /// Check for and install Jade updates for this install channel
+    Update {
+        /// Only report whether an update is available (do not install)
+        #[arg(long)]
+        check: bool,
+        /// Skip confirmation prompts (AUR uses yay --noconfirm)
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -90,6 +100,7 @@ fn main() -> ExitCode {
         Commands::Tasks { command } => tasks::run(command, &globals),
         Commands::Wiki { command } => wiki::run(command, &globals),
         Commands::Sync { command } => sync::run(command, &globals),
+        Commands::Update { check, yes } => update::run(check, yes, globals.json),
     };
 
     match result {
