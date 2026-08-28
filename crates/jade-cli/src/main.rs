@@ -19,6 +19,7 @@ use wiki::WikiCommand;
 #[derive(Debug, Parser)]
 #[command(
     name = "jade",
+    version,
     about = "Jade — local-first personal toolkit CLI",
     long_about = "Feature-first CLI for Jade. Start with a feature (e.g. tasks), then a verb \
 (list, add, update, delete).\n\nRich help: jade help | jade tasks help | jade tasks update status help\n\
@@ -73,6 +74,12 @@ fn main() -> ExitCode {
         return print_help(&[]);
     }
 
+    // clap defaults to -V; also accept -v for convenience.
+    if is_version_request(&raw) {
+        println!("jade {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+
     if !raw.iter().any(|a| a == "--help" || a == "-h") {
         if let Some(path) = help::extract_help_path(&raw) {
             return print_help(&path);
@@ -120,4 +127,17 @@ fn print_help(path: &[String]) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn is_version_request(args: &[String]) -> bool {
+    let has_version = args
+        .iter()
+        .any(|a| matches!(a.as_str(), "-v" | "-V" | "--version"));
+    let has_command = args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "tasks" | "wiki" | "sync" | "update" | "help"
+        )
+    });
+    has_version && !has_command
 }

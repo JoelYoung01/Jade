@@ -1,6 +1,6 @@
 # Jade CLI cheat sheet
 
-Global: `--json`, `--db <path>`, `jade help`, `jade <topic…> help`.
+Global: `--json`, `--db <path>`, `-v` / `--version`, `jade help`, `jade <topic…> help`.
 
 Prefer a **local** DB. Do not use `--db /mnt/c/...` to share the Windows Jade file from WSL — use `jade sync` instead.
 

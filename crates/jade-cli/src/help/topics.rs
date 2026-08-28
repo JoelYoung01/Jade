@@ -37,6 +37,7 @@ FEATURES
 GLOBAL OPTIONS
   --db <path>   Use a specific SQLite database (default: app data dir)
   --json        Machine-readable JSON output where applicable
+  -v, --version Print version and exit
   -h, --help    Clap help for the current command
   help          Rich topic help (this system)
 
