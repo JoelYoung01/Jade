@@ -22,7 +22,7 @@ Agents shell out to `jade … --json`. The desktop app and CLI share one SQLite 
 | Developing this repo | `just cli <args>` or `cargo run -p jade-cli -- <args>` |
 | Windows desktop installer | CLI not bundled yet — build from source |
 
-Default database: `app.jade.desktop/jade.db` under the OS user data directory. Override with `--db <path>` (e.g. from WSL to a Windows install: `/mnt/c/Users/<you>/AppData/Roaming/app.jade.desktop/jade.db`).
+Default database: `app.jade.desktop/jade.db` under the OS user data directory. Override with `--db <path>` only for a **local** path. Do **not** point WSL at the Windows DB via `/mnt/c/...` (SQLite WAL fails); use peer sync (`jade sync` / desktop Peer sync) so each OS keeps its own DB.
 
 ## Install
 

@@ -28,7 +28,7 @@ Prefer the binary AUR package (recipe lives in [`packaging/aur/jade-desktop-bin`
 yay -S jade-desktop-bin
 ```
 
-That install includes the desktop app **and** the `jade` CLI on `PATH`. In Arch WSL you can use the same package for the CLI and pass `--db` to share a Windows Jade database if needed.
+That install includes the desktop app **and** the `jade` CLI on `PATH`. In Arch WSL, use the Linux CLI against a **local** WSL database and **peer-sync** tasks with Windows Jade (LAN or Tailscale) — do not share the Windows `jade.db` over `/mnt/c` (SQLite WAL breaks). See [`docs/sync.md`](./docs/sync.md).
 
 In-app **Check for updates** detects an AUR install and can open Konsole with a targeted `yay -S --needed jade-desktop-bin` command. Jade will not overwrite pacman-owned files itself.
 
@@ -70,7 +70,11 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 
 ## Agent plugin
 
-Agents can install a portable plugin that teaches the `jade` CLI (tasks + wiki) and Jade’s local-first architecture. Package lives in [`plugin/`](./plugin/) — see [`plugin/README.md`](./plugin/README.md) for Cursor, Claude Code, and Agent Plugins 1.0 install notes.
+Agents can install a portable plugin that teaches the `jade` CLI (tasks + wiki + peer sync) and Jade’s local-first architecture. Package lives in [`plugin/`](./plugin/) — see [`plugin/README.md`](./plugin/README.md) for Cursor, Claude Code, and Agent Plugins 1.0 install notes.
+
+## Peer sync (tasks)
+
+Each machine keeps its own SQLite DB. Sync tasks over LAN or Tailscale with a shared token — see [`docs/sync.md`](./docs/sync.md). In the app: **⋯ → Peer sync**. CLI: `jade sync init|pair|now|serve|status`. Wiki files stay out of this protocol (optional Syncthing).
 
 ## Local development
 

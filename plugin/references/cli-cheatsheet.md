@@ -2,6 +2,8 @@
 
 Global: `--json`, `--db <path>`, `jade help`, `jade <topic…> help`.
 
+Prefer a **local** DB. Do not use `--db /mnt/c/...` to share the Windows Jade file from WSL — use `jade sync` instead.
+
 ## Tasks
 
 ```text
@@ -14,6 +16,18 @@ jade tasks history [--id <uuid>] [--limit 50] [--json]
 ```
 
 New tasks start as `inactive`. Delete soft-deletes (tombstone).
+
+## Peer sync
+
+```text
+jade sync init [--name "laptop"]
+jade sync status [--json]
+jade sync pair http://192.168.1.10:7421 --token <secret>
+jade sync now [--json]
+jade sync serve [--bind 0.0.0.0:7421] [--token <secret>]
+```
+
+LAN or Tailscale. Desktop: **⋯ → Peer sync**. See `docs/sync.md`.
 
 ## Wiki
 
