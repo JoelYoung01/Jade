@@ -151,11 +151,39 @@ impl SyncthingSettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerSyncSettings {
+    /// When true, desktop starts the sync listener while the app is open.
+    pub enabled: bool,
+    /// Bind address for the listener (e.g. `0.0.0.0:7421`).
+    pub bind: String,
+    /// Shared Bearer token for peer auth.
+    pub token: String,
+}
+
+impl Default for PeerSyncSettings {
+    fn default() -> Self {
+        Self::with_defaults()
+    }
+}
+
+impl PeerSyncSettings {
+    pub fn with_defaults() -> Self {
+        Self {
+            enabled: false,
+            bind: "0.0.0.0:7421".into(),
+            token: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub lane_visibility: LaneVisibility,
     #[serde(default)]
     pub syncthing: SyncthingSettings,
+    #[serde(default)]
+    pub peer_sync: PeerSyncSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]

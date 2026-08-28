@@ -86,6 +86,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/005_wiki.sql"),
     include_str!("../migrations/006_wiki_fts.sql"),
     include_str!("../migrations/007_wiki_date_summary.sql"),
+    include_str!("../migrations/008_sync_peers.sql"),
 ];
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -137,7 +138,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
 
         let count: i64 = conn
             .query_row(

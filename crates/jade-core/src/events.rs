@@ -7,7 +7,6 @@ use crate::db::Db;
 use crate::error::{Error, Result};
 use crate::models::{
     ListTaskEventsInput, ListTaskEventsSinceInput, Task, TaskEvent, TaskEventType,
-    EVENT_ORIGIN_LOCAL,
 };
 
 const DEFAULT_LIMIT: u32 = 50;
@@ -143,7 +142,7 @@ fn task_event_from_parts(
     })
 }
 
-/// Insert a task event inside an open transaction.
+/// Insert a task event inside an open transaction (origin = this device id).
 pub fn insert_event(
     tx: &rusqlite::Transaction<'_>,
     task_id: Uuid,
@@ -151,7 +150,8 @@ pub fn insert_event(
     payload: Value,
     now: DateTime<Utc>,
 ) -> Result<()> {
-    insert_event_with_origin(tx, task_id, event_type, payload, EVENT_ORIGIN_LOCAL, now)
+    let origin = crate::sync::local_origin_in_tx(tx)?;
+    insert_event_with_origin(tx, task_id, event_type, payload, &origin, now)
 }
 
 /// Insert a task event with an explicit origin (for future peer/agent writers).
@@ -234,6 +234,7 @@ mod tests {
     };
     use crate::tasks::{create_task, delete_task, update_task, update_task_status};
     use chrono::TimeZone;
+    use uuid::Uuid;
 
     fn sample_input(title: &str, due: DateTime<Utc>, tags: &[&str]) -> CreateTaskInput {
         CreateTaskInput {
@@ -262,7 +263,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, TaskEventType::Created);
         assert_eq!(events[0].seq, 1);
-        assert_eq!(events[0].origin, EVENT_ORIGIN_LOCAL);
+        assert!(Uuid::parse_str(&events[0].origin).is_ok());
         assert_eq!(events[0].payload["title"], "Logged");
         assert_eq!(events[0].payload["status"], "inactive");
         assert_eq!(events[0].payload["tags"], json!(["work"]));

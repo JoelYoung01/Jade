@@ -19,6 +19,8 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 ureq = { workspace = true }
 uuid = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+axum = { version = "0.8", default-features = true }
 
 [lints]
 workspace = true

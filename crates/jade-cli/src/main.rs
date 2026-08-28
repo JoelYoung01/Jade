@@ -2,6 +2,7 @@ mod db;
 mod due;
 mod help;
 mod output;
+mod sync;
 mod tasks;
 mod wiki;
 
@@ -10,6 +11,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 
+use sync::SyncCommand;
 use tasks::{Globals, TasksCommand};
 use wiki::WikiCommand;
 
@@ -47,6 +49,11 @@ enum Commands {
         #[command(subcommand)]
         command: WikiCommand,
     },
+    /// LAN peer sync for tasks
+    Sync {
+        #[command(subcommand)]
+        command: SyncCommand,
+    },
 }
 
 fn main() -> ExitCode {
@@ -56,7 +63,6 @@ fn main() -> ExitCode {
         return print_help(&[]);
     }
 
-    // Prefer rich topic help for bare `help` tokens; clap still owns --help / -h.
     if !raw.iter().any(|a| a == "--help" || a == "-h") {
         if let Some(path) = help::extract_help_path(&raw) {
             return print_help(&path);
@@ -83,6 +89,7 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Commands::Tasks { command } => tasks::run(command, &globals),
         Commands::Wiki { command } => wiki::run(command, &globals),
+        Commands::Sync { command } => sync::run(command, &globals),
     };
 
     match result {

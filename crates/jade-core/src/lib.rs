@@ -6,6 +6,7 @@ mod error;
 mod events;
 mod models;
 mod settings;
+mod sync;
 mod tags;
 mod tasks;
 mod time_helpers;
@@ -17,11 +18,18 @@ pub use error::{Error, Result};
 pub use events::{latest_event_seq, list_task_events, list_task_events_since};
 pub use models::{
     CreateTaskInput, DueUpdate, LaneVisibility, ListTaskEventsInput, ListTaskEventsSinceInput,
-    RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult, SyncthingSettings, Tag, Task,
-    TaskEvent, TaskEventType, TaskStatus, UpdateTaskInput, UpdateTaskStatusInput,
-    EVENT_ORIGIN_LOCAL,
+    PeerSyncSettings, RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult,
+    SyncthingSettings, Tag, Task, TaskEvent, TaskEventType, TaskStatus, UpdateTaskInput,
+    UpdateTaskStatusInput, EVENT_ORIGIN_LOCAL,
 };
-pub use settings::{get_settings, set_lane_visibility, set_syncthing_settings};
+pub use settings::{
+    get_settings, set_lane_visibility, set_peer_sync_settings, set_syncthing_settings,
+};
+pub use sync::{
+    apply_remote_task_events, ensure_device, generate_token, list_peers, pair_peer, serve_sync,
+    sync_all_peers, ApplyStats, HelloResponse, SyncDevice, SyncPeer, SyncReport,
+    SyncServerConfig, DEFAULT_SYNC_BIND, DEFAULT_SYNC_PORT, PROTOCOL_VERSION,
+};
 pub use tags::{count_tasks_with_tag, delete_tag, ensure_tag, list_tags};
 pub use tasks::{
     create_task, delete_task, get_task, list_tasks, reschedule_task, update_task,
