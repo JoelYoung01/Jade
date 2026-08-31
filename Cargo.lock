@@ -2067,7 +2067,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jade-cli"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2084,7 +2084,7 @@ dependencies = [
 
 [[package]]
 name = "jade-core"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "axum",
  "chrono",
@@ -2104,7 +2104,7 @@ dependencies = [
 
 [[package]]
 name = "jade-desktop"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "chrono",
  "jade-core",
