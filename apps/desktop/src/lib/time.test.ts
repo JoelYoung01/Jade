@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyDuePreset,
+  formatAbsoluteDateTime,
   formatDue,
   isOverdue,
   localWeekBounds,
@@ -81,6 +82,16 @@ describe("formatDue", () => {
     const absolute = formatDue(new Date(2027, 7, 22, 15, 30, 0).toISOString(), now);
     expect(absolute).not.toMatch(/ago|in \d|today|now/);
     expect(absolute).toMatch(/22/);
+  });
+});
+
+describe("formatAbsoluteDateTime", () => {
+  it("pretty-prints a local datetime with weekday and year", () => {
+    const formatted = formatAbsoluteDateTime(new Date(2026, 6, 22, 15, 30, 0).toISOString());
+    expect(formatted).toMatch(/Jul/);
+    expect(formatted).toMatch(/22/);
+    expect(formatted).toMatch(/2026/);
+    expect(formatted).not.toMatch(/T\d{2}:\d{2}/);
   });
 });
 

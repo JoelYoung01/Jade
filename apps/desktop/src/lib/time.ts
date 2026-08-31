@@ -41,6 +41,20 @@ function localMonthDiff(from: Date, to: Date): number {
  */
 export const DUE_NOW_WINDOW_MS = 60_000;
 
+/** Pretty absolute local datetime (e.g. "Wed, Jul 22, 3:30 PM"). */
+export function formatAbsoluteDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 /**
  * Format a due datetime for display. Within ±12 local calendar months of `now`,
  * uses relative phrasing up through months ("now", "in 5 minutes", "in 1 week",
@@ -84,13 +98,7 @@ export function formatDue(iso: string, now = new Date()): string {
     return rtf.format(monthDiff, "month");
   }
 
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return formatAbsoluteDateTime(iso);
 }
 
 /** True when the ISO datetime falls on today's local calendar date. */

@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { ShortcutKeys } from "@/components/ui/kbd";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   cronFromPreset,
   describeCron,
@@ -29,6 +30,8 @@ import {
 import type { RepeatPreset, Tag, Task, TaskFormValues } from "@/lib/types";
 import {
   applyDuePreset,
+  formatAbsoluteDateTime,
+  formatDue,
   fromDatetimeLocalValue,
   matchesDueQuickPreset,
   nextHourRounded,
@@ -682,14 +685,28 @@ function TaskForm({
             </p>
           )}
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving} className="gap-2">
-              <span>{saving ? "Saving…" : "Save"}</span>
-              {!saving && <ShortcutKeys keys={["Ctrl", "↵"]} className="text-primary-foreground" />}
-            </Button>
+          <div className="flex items-center gap-2">
+            {isEdit && task?.created_at ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-default text-xs text-muted-foreground">
+                    Created {formatDue(task.created_at)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {formatAbsoluteDateTime(task.created_at)}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            <div className="ml-auto flex gap-2">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving} className="gap-2">
+                <span>{saving ? "Saving…" : "Save"}</span>
+                {!saving && <ShortcutKeys keys={["Ctrl", "↵"]} className="text-primary-foreground" />}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
