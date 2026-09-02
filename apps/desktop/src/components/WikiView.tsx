@@ -2,11 +2,11 @@ import * as React from "react";
 
 import { WikiExplorerView } from "@/components/wiki/WikiExplorerView";
 import { WikiFoldersDialog } from "@/components/wiki/WikiFoldersDialog";
+import { WikiFrontMatterIssuesDialog } from "@/components/wiki/WikiFrontMatterIssuesDialog";
 import {
   groupWikiIndexIssues,
-  WikiFrontMatterIssuesDialog,
   type WikiFrontMatterFileGroup,
-} from "@/components/wiki/WikiFrontMatterIssuesDialog";
+} from "@/lib/wikiFrontMatterIssues";
 import { WikiReaderView } from "@/components/wiki/WikiReaderView";
 import { WikiSearchDialog } from "@/components/WikiSearchDialog";
 import {

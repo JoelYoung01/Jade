@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupWikiIndexIssues } from "@/components/wiki/WikiFrontMatterIssuesDialog";
+import { groupWikiIndexIssues } from "@/lib/wikiFrontMatterIssues";
 import type { WikiIndexIssue } from "@/lib/types";
 
 function issue(

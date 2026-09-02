@@ -61,9 +61,9 @@ export function WikiReaderView({
   onCloseMetadata,
   onRepairFrontMatter,
 }: WikiReaderViewProps): React.JSX.Element {
-  const title = content.page.title_cache || content.page.rel_path;
+  const title = content.page.title_cache ?? content.page.rel_path;
   const sourceUrl =
-    content.front_matter?.url?.trim() || content.front_matter?.source?.trim() || null;
+    content.front_matter?.url?.trim() ?? content.front_matter?.source?.trim() ?? null;
   const frontMatterIssues = content.front_matter_issues ?? [];
   const repairLabel =
     frontMatterIssues.find((issue) => issue.repair_label)?.repair_label ?? "Fix front matter";
