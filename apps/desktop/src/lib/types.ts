@@ -143,12 +143,44 @@ export type WikiFrontMatter = {
   [key: string]: unknown;
 };
 
+export type WikiFrontMatterIssueKind =
+  | "string_as_list"
+  | "scalar_as_string"
+  | "invalid_yaml"
+  | "unsupported_type"
+  | "invalid_id"
+  | "read_failed";
+
+export type WikiFrontMatterIssue = {
+  kind: WikiFrontMatterIssueKind;
+  field: string | null;
+  message: string;
+  line: number | null;
+  column: number | null;
+  repairable: boolean;
+  repair_label: string | null;
+};
+
+export type WikiIndexIssue = WikiFrontMatterIssue & {
+  root_id: string;
+  rel_path: string;
+  absolute_path: string;
+};
+
+export type ReindexStats = {
+  scanned: number;
+  upserted: number;
+  missing: number;
+  issues: WikiIndexIssue[];
+};
+
 export type WikiPageContent = {
   page: WikiPage;
   absolute_path: string;
   content: string;
   front_matter: WikiFrontMatter | null;
   body: string;
+  front_matter_issues: WikiFrontMatterIssue[];
 };
 
 export type WikiBacklink = {

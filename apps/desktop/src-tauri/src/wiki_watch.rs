@@ -7,11 +7,20 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use jade_core::{list_wiki_roots, reindex_root, Db};
+use jade_core::{list_wiki_roots, reindex_root, Db, WikiIndexIssue};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::{AppHandle, Manager};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager};
+use uuid::Uuid;
 
 const DEBOUNCE_MS: u64 = 400;
+const WIKI_INDEX_ISSUES_EVENT: &str = "wiki-index-issues";
+
+#[derive(Clone, Serialize)]
+struct WikiIndexIssuesPayload {
+    root_ids: Vec<Uuid>,
+    issues: Vec<WikiIndexIssue>,
+}
 
 pub struct WikiWatchState {
     restart: Arc<AtomicBool>,
@@ -76,7 +85,7 @@ pub fn spawn_wiki_watcher(app: AppHandle, watch: Arc<WikiWatchState>) {
                 };
                 if !dirty.is_empty() {
                     let state = app.state::<crate::AppState>();
-                    reindex_dirty_roots(&state.db, &dirty);
+                    reindex_dirty_roots(&app, &state.db, &dirty);
                     last_fire = Instant::now();
                 }
             }
@@ -119,7 +128,7 @@ fn is_markdown(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("md"))
 }
 
-fn reindex_dirty_roots(db: &Db, dirty: &[PathBuf]) {
+fn reindex_dirty_roots(app: &AppHandle, db: &Db, dirty: &[PathBuf]) {
     let Ok(roots) = list_wiki_roots(db) else {
         return;
     };
@@ -136,7 +145,18 @@ fn reindex_dirty_roots(db: &Db, dirty: &[PathBuf]) {
             }
         }
     }
+    let mut root_ids = Vec::new();
+    let mut issues = Vec::new();
     for id in touched {
-        let _ = reindex_root(db, id);
+        root_ids.push(id);
+        if let Ok(stats) = reindex_root(db, id) {
+            issues.extend(stats.issues);
+        }
+    }
+    if !root_ids.is_empty() {
+        let _ = app.emit(
+            WIKI_INDEX_ISSUES_EVENT,
+            WikiIndexIssuesPayload { root_ids, issues },
+        );
     }
 }

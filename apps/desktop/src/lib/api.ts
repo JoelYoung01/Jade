@@ -27,6 +27,8 @@ import type {
   WikiRoot,
   WikiSearchHit,
   WikiSearchSnippet,
+  ReindexStats,
+  WikiIndexIssue,
 } from "@/lib/types";
 
 export const DB_CHANGED_EVENT = "db-changed";
@@ -517,6 +519,7 @@ export async function apiReadWikiPage(id: string): Promise<WikiPageContent> {
       content,
       front_matter: { id: page.id, title: page.title_cache, tags: page.tags_cache },
       body: content,
+      front_matter_issues: [],
     };
   }
   return invoke<WikiPageContent>("read_wiki_page_cmd", { id });
@@ -557,6 +560,7 @@ export async function apiCreateWikiPage(input: {
       content,
       front_matter: { id: page.id, title: page.title_cache, tags: [] },
       body: input.body ?? "",
+      front_matter_issues: [],
     };
   }
   return invoke<WikiPageContent>("create_wiki_page_cmd", {
@@ -591,9 +595,37 @@ export async function apiWriteWikiPage(
   });
 }
 
-export async function apiReindexWiki(rootId?: string): Promise<void> {
-  if (!isTauri()) return;
-  await invoke<null>("reindex_wiki_cmd", { rootId: rootId ?? null });
+export async function apiReindexWiki(rootId?: string): Promise<ReindexStats> {
+  if (!isTauri()) {
+    return { scanned: 0, upserted: 0, missing: 0, issues: [] };
+  }
+  return invoke<ReindexStats>("reindex_wiki_cmd", { rootId: rootId ?? null });
+}
+
+export async function apiRepairWikiFrontMatter(
+  rootId: string,
+  relPath: string,
+): Promise<WikiPageContent> {
+  if (!isTauri()) {
+    throw new Error("Front matter repair requires the desktop app.");
+  }
+  return invoke<WikiPageContent>("repair_wiki_front_matter_cmd", {
+    args: { root_id: rootId, rel_path: relPath },
+  });
+}
+
+export const WIKI_INDEX_ISSUES_EVENT = "wiki-index-issues";
+
+export async function apiSubscribeWikiIndexIssues(
+  onIssues: (rootIds: string[], issues: WikiIndexIssue[]) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen<{ root_ids: string[]; issues: WikiIndexIssue[] }>(
+    WIKI_INDEX_ISSUES_EVENT,
+    (event) => {
+      onIssues(event.payload.root_ids, event.payload.issues);
+    },
+  );
 }
 
 export async function apiListWikiBacklinks(pageId: string): Promise<WikiBacklink[]> {

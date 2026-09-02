@@ -5,8 +5,8 @@ mod links;
 mod syncthing;
 
 pub use frontmatter::{
-    ensure_identity, parse_markdown, render_markdown, resolve_date_added, resolve_title,
-    FrontMatter,
+    ensure_identity, parse_markdown, render_markdown, repair_markdown_front_matter,
+    resolve_date_added, resolve_title, FrontMatter, FrontMatterIssue, WikiFrontMatterIssueKind,
 };
 pub use links::extract_link_targets;
 pub use syncthing::{
@@ -155,6 +155,8 @@ pub struct WikiPageContent {
     pub content: String,
     pub front_matter: Option<FrontMatter>,
     pub body: String,
+    #[serde(default)]
+    pub front_matter_issues: Vec<FrontMatterIssue>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -251,11 +253,64 @@ pub struct WikiSearchHit {
     pub score: i32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ReindexStats {
     pub scanned: u64,
     pub upserted: u64,
     pub missing: u64,
+    #[serde(default)]
+    pub issues: Vec<WikiIndexIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WikiIndexIssue {
+    pub root_id: Uuid,
+    pub rel_path: String,
+    pub absolute_path: String,
+    pub kind: WikiFrontMatterIssueKind,
+    pub field: Option<String>,
+    pub message: String,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+    pub repairable: bool,
+    pub repair_label: Option<String>,
+}
+
+impl WikiIndexIssue {
+    fn from_front_matter(
+        root_id: Uuid,
+        rel_path: &str,
+        absolute: &Path,
+        issue: FrontMatterIssue,
+    ) -> Self {
+        Self {
+            root_id,
+            rel_path: rel_path.to_owned(),
+            absolute_path: absolute.to_string_lossy().into_owned(),
+            kind: issue.kind,
+            field: issue.field,
+            message: issue.message,
+            line: issue.line,
+            column: issue.column,
+            repairable: issue.repairable,
+            repair_label: issue.repair_label,
+        }
+    }
+
+    fn read_failed(root_id: Uuid, rel_path: &str, absolute: &Path, error: &Error) -> Self {
+        Self {
+            root_id,
+            rel_path: rel_path.to_owned(),
+            absolute_path: absolute.to_string_lossy().into_owned(),
+            kind: WikiFrontMatterIssueKind::ReadFailed,
+            field: None,
+            message: format!("Jade couldn't read this file: {error}"),
+            line: None,
+            column: None,
+            repairable: false,
+            repair_label: None,
+        }
+    }
 }
 
 // --- Roots ------------------------------------------------------------------
@@ -621,7 +676,9 @@ fn make_body_snippet(body: &str, query: &str) -> Option<WikiSearchSnippet> {
         before = format!("…{}", before.trim_start());
     }
 
-    let after_char_end = (start_i + q_len).saturating_add(SNIPPET_CONTEXT).min(hay.len());
+    let after_char_end = (start_i + q_len)
+        .saturating_add(SNIPPET_CONTEXT)
+        .min(hay.len());
     let after_byte = if after_char_end < hay.len() {
         hay[after_char_end].0
     } else {
@@ -944,13 +1001,14 @@ pub fn read_wiki_page(db: &Db, id: Uuid) -> Result<WikiPageContent> {
     let absolute = PathBuf::from(&root.path).join(&page.rel_path);
     let content = fs::read_to_string(&absolute)
         .map_err(|e| Error::Message(format!("failed to read {}: {e}", absolute.display())))?;
-    let parsed = parse_markdown(&content)?;
+    let parsed = parse_markdown(&content);
     Ok(WikiPageContent {
         page,
         absolute_path: absolute.to_string_lossy().into_owned(),
         content,
         front_matter: parsed.front_matter,
         body: parsed.body,
+        front_matter_issues: parsed.issues,
     })
 }
 
@@ -1018,7 +1076,7 @@ pub fn write_wiki_page(db: &Db, input: WriteWikiPageInput) -> Result<WikiPageCon
 
     let ensure = input.ensure_front_matter.unwrap_or(true);
     let content = if ensure {
-        let mut parsed = parse_markdown(&input.content)?;
+        let mut parsed = parse_markdown(&input.content);
         let stem = absolute
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -1042,6 +1100,44 @@ pub fn write_wiki_page(db: &Db, input: WriteWikiPageInput) -> Result<WikiPageCon
     fs::write(&absolute, &content)
         .map_err(|e| Error::Message(format!("failed to write {}: {e}", absolute.display())))?;
     index_file(db, &root, &page.rel_path, &absolute)?;
+    read_wiki_page(db, page.id)
+}
+
+/// Rewrite a wiki file's YAML header into Jade's canonical form.
+///
+/// Coerces known mismatches (string `references`/`tags`, scalar titles, invalid
+/// ids) and replaces unreadable YAML with a fresh header while keeping the body.
+pub fn repair_wiki_front_matter(db: &Db, root_id: Uuid, rel_path: &str) -> Result<WikiPageContent> {
+    let mut rel = rel_path.trim().replace('\\', "/");
+    while rel.starts_with('/') {
+        rel = rel[1..].to_owned();
+    }
+    if rel.is_empty() {
+        return Err(Error::Message("rel_path is required".into()));
+    }
+    if rel.contains("..") {
+        return Err(Error::Message("rel_path must not contain '..'".into()));
+    }
+
+    let root = get_wiki_root(db, root_id)?;
+    if !root.enabled {
+        return Err(Error::Message("wiki root is disabled".into()));
+    }
+    let absolute = PathBuf::from(&root.path).join(&rel);
+    if !absolute.is_file() {
+        return Err(Error::Message(format!(
+            "wiki file not found: {}",
+            absolute.display()
+        )));
+    }
+
+    let content = fs::read_to_string(&absolute)
+        .map_err(|e| Error::Message(format!("failed to read {}: {e}", absolute.display())))?;
+    let repaired = repair_markdown_front_matter(&content)?;
+    fs::write(&absolute, repaired)
+        .map_err(|e| Error::Message(format!("failed to write {}: {e}", absolute.display())))?;
+    index_file(db, &root, &rel, &absolute)?;
+    let page = find_page_by_rel(db, root.id, &rel)?;
     read_wiki_page(db, page.id)
 }
 
@@ -1111,9 +1207,19 @@ pub fn reindex_root(db: &Db, root_id: Uuid) -> Result<ReindexStats> {
 
     visit_markdown_files(&root_path, &root_path, &mut |rel, abs| {
         stats.scanned += 1;
-        seen.push(rel.replace('\\', "/"));
-        index_file(db, &root, &rel.replace('\\', "/"), abs)?;
-        stats.upserted += 1;
+        let rel_norm = rel.replace('\\', "/");
+        seen.push(rel_norm.clone());
+        match index_file(db, &root, &rel_norm, abs) {
+            Ok(issues) => {
+                stats.upserted += 1;
+                stats.issues.extend(issues);
+            }
+            Err(err) => {
+                stats
+                    .issues
+                    .push(WikiIndexIssue::read_failed(root.id, &rel_norm, abs, &err));
+            }
+        }
         Ok(())
     })?;
 
@@ -1137,10 +1243,7 @@ pub fn reindex_root(db: &Db, root_id: Uuid) -> Result<ReindexStats> {
                 "UPDATE wiki_pages SET missing_at = ?1, updated_at = ?1 WHERE id = ?2",
                 params![now.to_rfc3339(), id],
             )?;
-            conn.execute(
-                "DELETE FROM wiki_pages_fts WHERE page_id = ?1",
-                params![id],
-            )?;
+            conn.execute("DELETE FROM wiki_pages_fts WHERE page_id = ?1", params![id])?;
             stats.missing += 1;
         }
     }
@@ -1158,18 +1261,24 @@ pub fn reindex_all(db: &Db) -> Result<ReindexStats> {
         total.scanned += stats.scanned;
         total.upserted += stats.upserted;
         total.missing += stats.missing;
+        total.issues.extend(stats.issues);
     }
     Ok(total)
 }
 
 #[allow(clippy::too_many_lines)]
-fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Result<()> {
+fn index_file(
+    db: &Db,
+    root: &WikiRoot,
+    rel_path: &str,
+    absolute: &Path,
+) -> Result<Vec<WikiIndexIssue>> {
     let bytes = fs::read(absolute)
         .map_err(|e| Error::Message(format!("failed to read {}: {e}", absolute.display())))?;
     let content_hash = hex::encode(Sha256::digest(&bytes));
     let mtime = file_mtime(absolute)?;
     let text = String::from_utf8_lossy(&bytes);
-    let parsed = parse_markdown(&text)?;
+    let parsed = parse_markdown(&text);
     let stem = absolute
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -1285,14 +1394,7 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
         )?;
     }
 
-    upsert_wiki_fts(
-        &tx,
-        entity_id,
-        &title,
-        rel_path,
-        &tags,
-        &parsed.body,
-    )?;
+    upsert_wiki_fts(&tx, entity_id, &title, rel_path, &tags, &parsed.body)?;
 
     if let Some(event_type) = event_type {
         insert_wiki_event(
@@ -1310,7 +1412,11 @@ fn index_file(db: &Db, root: &WikiRoot, rel_path: &str, absolute: &Path) -> Resu
     }
 
     tx.commit()?;
-    Ok(())
+    Ok(parsed
+        .issues
+        .into_iter()
+        .map(|issue| WikiIndexIssue::from_front_matter(root.id, rel_path, absolute, issue))
+        .collect())
 }
 
 fn upsert_wiki_fts(
@@ -1330,13 +1436,7 @@ fn upsert_wiki_fts(
         INSERT INTO wiki_pages_fts (page_id, title, rel_path, tags, body)
         VALUES (?1, ?2, ?3, ?4, ?5)
         ",
-        params![
-            page_id.to_string(),
-            title,
-            rel_path,
-            tags.join(" "),
-            body
-        ],
+        params![page_id.to_string(), title, rel_path, tags.join(" "), body],
     )?;
     Ok(())
 }
@@ -1347,11 +1447,7 @@ fn find_page_by_rel(db: &Db, root_id: Uuid, rel_path: &str) -> Result<WikiPage> 
         "SELECT {PAGE_COLUMNS} FROM wiki_pages \
          WHERE root_id = ?1 AND rel_path = ?2 AND deleted_at IS NULL"
     );
-    let row = conn.query_row(
-        &sql,
-        params![root_id.to_string(), rel_path],
-        map_page_row,
-    )?;
+    let row = conn.query_row(&sql, params![root_id.to_string(), rel_path], map_page_row)?;
     page_from_row(row)
 }
 
@@ -1727,10 +1823,7 @@ mod tests {
             strip_markdown_for_display("# Title\n`code` and snake_case"),
             "Title code and snake_case"
         );
-        assert_eq!(
-            strip_snippet_part("…**before** match"),
-            "…before match"
-        );
+        assert_eq!(strip_snippet_part("…**before** match"), "…before match");
     }
 
     #[test]
@@ -1775,5 +1868,72 @@ mod tests {
             build_fts_match_query("foo\"bar").as_deref(),
             Some("\"foobar\"*")
         );
+    }
+
+    #[test]
+    fn reindex_continues_when_front_matter_is_malformed() {
+        let dir = std::env::temp_dir().join(format!("jade-wiki-{}", Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("ok.md"),
+            "---\ntitle: Ok\ntags:\n  - fine\n---\n# Ok\n\nGood file.\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("wigolo.md"),
+            "---\ntitle: Wigolo\nreferences: https://github.com/KnockOutEZ/wigolo\n---\n# Wigolo\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("broken.md"),
+            "---\ntitle: [unterminated\n---\n# Broken\n\nStill searchable.\n",
+        )
+        .unwrap();
+
+        let db = open_memory().unwrap();
+        let root = add_wiki_root(
+            &db,
+            AddWikiRootInput {
+                path: dir.to_string_lossy().into_owned(),
+                label: Some("Mixed".into()),
+            },
+        )
+        .unwrap();
+
+        let pages = list_wiki_pages(&db, Some(root.id)).unwrap();
+        assert_eq!(pages.len(), 3, "malformed files should still be indexed");
+        assert!(pages
+            .iter()
+            .any(|p| p.title_cache.as_deref() == Some("Wigolo")));
+        assert!(pages
+            .iter()
+            .any(|p| p.title_cache.as_deref() == Some("Broken")));
+
+        let stats = reindex_root(&db, root.id).unwrap();
+        assert!(stats
+            .issues
+            .iter()
+            .any(|issue| issue.rel_path == "wigolo.md"
+                && issue.kind == WikiFrontMatterIssueKind::StringAsList));
+        assert!(stats
+            .issues
+            .iter()
+            .any(|issue| issue.rel_path == "broken.md"
+                && issue.kind == WikiFrontMatterIssueKind::InvalidYaml));
+
+        let repaired = repair_wiki_front_matter(&db, root.id, "wigolo.md").unwrap();
+        assert!(repaired.front_matter_issues.is_empty());
+        assert_eq!(
+            repaired.front_matter.unwrap().references,
+            vec!["https://github.com/KnockOutEZ/wigolo".to_owned()]
+        );
+
+        let stats = reindex_root(&db, root.id).unwrap();
+        assert!(!stats
+            .issues
+            .iter()
+            .any(|issue| issue.rel_path == "wigolo.md"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

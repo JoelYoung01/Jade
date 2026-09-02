@@ -37,6 +37,7 @@ type WikiReaderViewProps = {
   onCopyBody: () => void;
   onDraftChange: (value: string) => void;
   onCloseMetadata: () => void;
+  onRepairFrontMatter: () => void;
 };
 
 export function WikiReaderView({
@@ -58,10 +59,14 @@ export function WikiReaderView({
   onCopyBody,
   onDraftChange,
   onCloseMetadata,
+  onRepairFrontMatter,
 }: WikiReaderViewProps): React.JSX.Element {
   const title = content.page.title_cache || content.page.rel_path;
   const sourceUrl =
     content.front_matter?.url?.trim() || content.front_matter?.source?.trim() || null;
+  const frontMatterIssues = content.front_matter_issues ?? [];
+  const repairLabel =
+    frontMatterIssues.find((issue) => issue.repair_label)?.repair_label ?? "Fix front matter";
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -158,6 +163,25 @@ export function WikiReaderView({
           )}
         </div>
       </div>
+
+      {frontMatterIssues.length > 0 ? (
+        <div className="flex items-center gap-3 border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+          <p className="min-w-0 flex-1">
+            This article&apos;s YAML header isn&apos;t in the shape Jade expects.
+          </p>
+          {frontMatterIssues.some((issue) => issue.repairable) ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 shrink-0"
+              onClick={onRepairFrontMatter}
+              disabled={busy || editing}
+            >
+              {repairLabel}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {editing ? (
         <Textarea

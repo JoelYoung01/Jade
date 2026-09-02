@@ -2,6 +2,11 @@ import * as React from "react";
 
 import { WikiExplorerView } from "@/components/wiki/WikiExplorerView";
 import { WikiFoldersDialog } from "@/components/wiki/WikiFoldersDialog";
+import {
+  groupWikiIndexIssues,
+  WikiFrontMatterIssuesDialog,
+  type WikiFrontMatterFileGroup,
+} from "@/components/wiki/WikiFrontMatterIssuesDialog";
 import { WikiReaderView } from "@/components/wiki/WikiReaderView";
 import { WikiSearchDialog } from "@/components/WikiSearchDialog";
 import {
@@ -15,8 +20,10 @@ import {
   apiReadWikiPage,
   apiReindexWiki,
   apiRemoveWikiRoot,
+  apiRepairWikiFrontMatter,
   apiSetSyncthingSettings,
   apiSubscribeDbChanged,
+  apiSubscribeWikiIndexIssues,
   apiWikiRootSyncthingStatus,
   apiWriteWikiPage,
 } from "@/lib/api";
@@ -24,6 +31,7 @@ import type {
   SyncthingSettings,
   SyncthingStatus,
   WikiBacklink,
+  WikiIndexIssue,
   WikiPage,
   WikiPageContent,
   WikiRoot,
@@ -52,6 +60,9 @@ export function WikiView(): React.JSX.Element {
     api_key: "",
   });
   const [error, setError] = React.useState<string | null>(null);
+  const [indexIssues, setIndexIssues] = React.useState<WikiIndexIssue[]>([]);
+  const [issuesOpen, setIssuesOpen] = React.useState(false);
+  const [repairingKey, setRepairingKey] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [newRelPath, setNewRelPath] = React.useState("");
   const [foldersOpen, setFoldersOpen] = React.useState(false);
@@ -96,6 +107,21 @@ export function WikiView(): React.JSX.Element {
       unlisten?.();
     };
   }, [refreshRootsAndPages]);
+
+  React.useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void apiSubscribeWikiIndexIssues((rootIds, issues) => {
+      setIndexIssues((prev) => {
+        const drop = new Set(rootIds);
+        return [...prev.filter((issue) => !drop.has(issue.root_id)), ...issues];
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!selectedPageId) {
@@ -219,12 +245,97 @@ export function WikiView(): React.JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      await apiReindexWiki(selectedRootId ?? undefined);
+      const stats = await apiReindexWiki(selectedRootId ?? undefined);
+      setIndexIssues((prev) => {
+        if (!selectedRootId) return stats.issues;
+        return [
+          ...prev.filter((issue) => issue.root_id !== selectedRootId),
+          ...stats.issues,
+        ];
+      });
+      if (stats.issues.length > 0) {
+        setIssuesOpen(true);
+      }
       await refreshRootsAndPages();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function dropIssuesForFile(rootId: string, relPath: string): void {
+    setIndexIssues((prev) =>
+      prev.filter((issue) => !(issue.root_id === rootId && issue.rel_path === relPath)),
+    );
+  }
+
+  async function applyFrontMatterRepair(
+    rootId: string,
+    relPath: string,
+  ): Promise<void> {
+    const next = await apiRepairWikiFrontMatter(rootId, relPath);
+    dropIssuesForFile(rootId, relPath);
+    if (selectedPageId === next.page.id) {
+      setContent(next);
+      if (!editing) {
+        setDraft(next.content);
+      }
+    }
+  }
+
+  async function handleRepairFile(group: WikiFrontMatterFileGroup): Promise<void> {
+    setBusy(true);
+    setRepairingKey(group.key);
+    setError(null);
+    try {
+      await applyFrontMatterRepair(group.root_id, group.rel_path);
+      await refreshRootsAndPages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setRepairingKey(null);
+    }
+  }
+
+  async function handleRepairAll(): Promise<void> {
+    const groups = groupWikiIndexIssues(indexIssues).filter((group) => group.repairable);
+    setBusy(true);
+    setRepairingKey("*");
+    setError(null);
+    try {
+      for (const group of groups) {
+        await applyFrontMatterRepair(group.root_id, group.rel_path);
+      }
+      await refreshRootsAndPages();
+      const hadUnrepairable = groupWikiIndexIssues(indexIssues).some(
+        (group) => !group.repairable,
+      );
+      if (!hadUnrepairable) {
+        setIssuesOpen(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setRepairingKey(null);
+    }
+  }
+
+  async function handleRepairCurrentPage(): Promise<void> {
+    if (!content) return;
+    setBusy(true);
+    setRepairingKey(`${content.page.root_id}:${content.page.rel_path}`);
+    setError(null);
+    try {
+      await applyFrontMatterRepair(content.page.root_id, content.page.rel_path);
+      await refreshRootsAndPages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setRepairingKey(null);
     }
   }
 
@@ -338,6 +449,23 @@ export function WikiView(): React.JSX.Element {
         </div>
       ) : null}
 
+      {indexIssues.length > 0 ? (
+        <div className="flex items-center gap-3 border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+          <p className="min-w-0 flex-1">
+            {indexIssues.length === 1
+              ? "1 wiki file has a front matter problem."
+              : `${indexIssues.length} wiki files have front matter problems.`}
+          </p>
+          <button
+            type="button"
+            className="shrink-0 underline underline-offset-2"
+            onClick={() => setIssuesOpen(true)}
+          >
+            Review and fix
+          </button>
+        </div>
+      ) : null}
+
       {viewMode === "explorer" ? (
         <WikiExplorerView
           roots={roots}
@@ -375,6 +503,7 @@ export function WikiView(): React.JSX.Element {
           onCopyBody={() => void handleCopyBody()}
           onDraftChange={setDraft}
           onCloseMetadata={() => setMetadataOpen(false)}
+          onRepairFrontMatter={() => void handleRepairCurrentPage()}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -403,6 +532,16 @@ export function WikiView(): React.JSX.Element {
         onToggleSyncSettings={() => setShowSyncSettings((v) => !v)}
         onSyncthingChange={setSyncthing}
         onSaveSyncthing={() => void handleSaveSyncthing()}
+      />
+
+      <WikiFrontMatterIssuesDialog
+        open={issuesOpen}
+        onOpenChange={setIssuesOpen}
+        issues={indexIssues}
+        busy={busy}
+        repairingKey={repairingKey}
+        onRepairFile={(group) => void handleRepairFile(group)}
+        onRepairAll={() => void handleRepairAll()}
       />
     </div>
   );

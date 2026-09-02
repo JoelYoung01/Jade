@@ -18,13 +18,14 @@ use jade_core::{
     default_db_path, delete_tag, delete_task, ensure_tag, generate_token, get_settings,
     get_wiki_page, latest_event_seq, list_backlinks, list_tags, list_task_events_since, list_tasks,
     list_wiki_pages, list_wiki_roots, open_db, read_wiki_page, reindex_all, reindex_root,
-    remove_wiki_root, reschedule_task, search_wiki_pages, set_lane_visibility,
-    set_syncthing_settings, status_for_path, update_task, update_task_status, write_wiki_page,
-    AddWikiRootInput, CreateTaskInput, CreateWikiPageInput, Db, DueUpdate, LaneVisibility,
-    ListTaskEventsSinceInput, PeerSyncSettings, RepeatCronUpdate, RescheduleMode, Settings,
-    StatusUpdateResult, SyncPeer, SyncReport, SyncthingClientConfig, SyncthingSettings,
-    SyncthingStatus, Tag, Task, TaskEvent, TaskStatus, UpdateTaskInput, UpdateTaskStatusInput,
-    WikiBacklink, WikiPage, WikiPageContent, WikiRoot, WikiSearchHit, WriteWikiPageInput,
+    remove_wiki_root, repair_wiki_front_matter, reschedule_task, search_wiki_pages,
+    set_lane_visibility, set_syncthing_settings, status_for_path, update_task, update_task_status,
+    write_wiki_page, AddWikiRootInput, CreateTaskInput, CreateWikiPageInput, Db, DueUpdate,
+    LaneVisibility, ListTaskEventsSinceInput, PeerSyncSettings, ReindexStats, RepeatCronUpdate,
+    RescheduleMode, Settings, StatusUpdateResult, SyncPeer, SyncReport, SyncthingClientConfig,
+    SyncthingSettings, SyncthingStatus, Tag, Task, TaskEvent, TaskStatus, UpdateTaskInput,
+    UpdateTaskStatusInput, WikiBacklink, WikiPage, WikiPageContent, WikiRoot, WikiSearchHit,
+    WriteWikiPageInput,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -221,9 +222,7 @@ fn set_syncthing_settings_cmd(
 }
 
 #[tauri::command]
-fn get_peer_sync_status_cmd(
-    state: tauri::State<'_, AppState>,
-) -> Result<PeerSyncStatus, String> {
+fn get_peer_sync_status_cmd(state: tauri::State<'_, AppState>) -> Result<PeerSyncStatus, String> {
     peer_sync::status(&state.db, &state.peer_sync)
 }
 
@@ -400,13 +399,26 @@ fn write_wiki_page_cmd(
 fn reindex_wiki_cmd(
     state: tauri::State<'_, AppState>,
     root_id: Option<Uuid>,
-) -> Result<(), String> {
+) -> Result<ReindexStats, String> {
     if let Some(id) = root_id {
-        reindex_root(&state.db, id).map_err(|e| e.to_string())?;
+        reindex_root(&state.db, id).map_err(|e| e.to_string())
     } else {
-        reindex_all(&state.db).map_err(|e| e.to_string())?;
+        reindex_all(&state.db).map_err(|e| e.to_string())
     }
-    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct RepairWikiFrontMatterArgs {
+    root_id: Uuid,
+    rel_path: String,
+}
+
+#[tauri::command]
+fn repair_wiki_front_matter_cmd(
+    state: tauri::State<'_, AppState>,
+    args: RepairWikiFrontMatterArgs,
+) -> Result<WikiPageContent, String> {
+    repair_wiki_front_matter(&state.db, args.root_id, &args.rel_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -495,9 +507,7 @@ pub fn run() {
         .setup(move |app| {
             let path = default_db_path().map_err(|e| e.to_string())?;
             let db = open_db(&path).map_err(|e| e.to_string())?;
-            let peer_settings = get_settings(&db)
-                .map_err(|e| e.to_string())?
-                .peer_sync;
+            let peer_settings = get_settings(&db).map_err(|e| e.to_string())?.peer_sync;
             if peer_settings.enabled {
                 peer_sync_for_setup.start(&peer_settings)?;
             }
@@ -552,6 +562,7 @@ pub fn run() {
             create_wiki_page_cmd,
             write_wiki_page_cmd,
             reindex_wiki_cmd,
+            repair_wiki_front_matter_cmd,
             list_wiki_backlinks_cmd,
             wiki_root_syncthing_status_cmd,
             pick_wiki_folder_cmd,
