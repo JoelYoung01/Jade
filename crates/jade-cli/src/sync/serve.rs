@@ -11,11 +11,7 @@ use tokio::sync::oneshot;
 use crate::db::open_cli_db;
 use crate::tasks::Globals;
 
-pub fn run(
-    globals: &Globals,
-    bind: Option<&str>,
-    token: Option<&str>,
-) -> anyhow::Result<()> {
+pub fn run(globals: &Globals, bind: Option<&str>, token: Option<&str>) -> anyhow::Result<()> {
     let db_path = resolve_db_path(globals.db.clone())?;
     let db = open_cli_db(Some(db_path.clone()))?;
     let _ = ensure_device(&db, None)?;

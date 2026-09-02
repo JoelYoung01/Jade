@@ -110,9 +110,7 @@ fn map_err(err: String) -> anyhow::Error {
     anyhow::anyhow!(err)
 }
 
-fn resolve_channel(
-    kind: &InstallKind,
-) -> anyhow::Result<(Option<String>, String, Option<String>)> {
+fn resolve_channel(kind: &InstallKind) -> anyhow::Result<(Option<String>, String, Option<String>)> {
     match kind {
         InstallKind::Aur => {
             let aur = fetch_aur_package_info().map_err(map_err)?;
@@ -319,9 +317,7 @@ fn shell_quote(s: &str) -> String {
 
 fn apply_aur(yes: bool) -> anyhow::Result<()> {
     if !command_exists("yay") {
-        bail!(
-            "yay is not installed. Install updates with:\n  yay -S --needed {AUR_PACKAGE_NAME}"
-        );
+        bail!("yay is not installed. Install updates with:\n  yay -S --needed {AUR_PACKAGE_NAME}");
     }
     let mut cmd = Command::new("yay");
     cmd.args(["-S", "--needed", AUR_PACKAGE_NAME]);
@@ -403,9 +399,7 @@ fn apply_cli_script(version: &str, url: &str, yes: bool) -> anyhow::Result<()> {
     install_binary(&new_bin, &dest)?;
     write_marker_best_effort(&prefix, version)?;
     let _ = std::fs::remove_dir_all(&extract_root);
-    println!(
-        "CLI script install updated to {version}.\nTry: jade -v && jade update --check"
-    );
+    println!("CLI script install updated to {version}.\nTry: jade -v && jade update --check");
     Ok(())
 }
 
@@ -461,10 +455,7 @@ fn extract_deb(deb: &Path, dest_dir: &Path) -> anyhow::Result<()> {
 
 fn install_binary(src: &Path, dest: &Path) -> anyhow::Result<()> {
     let parent = dest.parent().context("dest has no parent")?;
-    let staging = parent.join(format!(
-        ".jade-update-{}",
-        std::process::id()
-    ));
+    let staging = parent.join(format!(".jade-update-{}", std::process::id()));
     if parent
         .metadata()
         .map(|m| !m.permissions().readonly())
@@ -478,9 +469,7 @@ fn install_binary(src: &Path, dest: &Path) -> anyhow::Result<()> {
             perms.set_mode(0o755);
             std::fs::set_permissions(&staging, perms)?;
         }
-        std::fs::rename(&staging, dest).with_context(|| {
-            format!("replace {}", dest.display())
-        })?;
+        std::fs::rename(&staging, dest).with_context(|| format!("replace {}", dest.display()))?;
         return Ok(());
     }
     // Fallback: sudo install
@@ -569,16 +558,12 @@ fn apply_appimage(version: &str, url: &str, yes: bool) -> anyhow::Result<()> {
         .map(|p| p.join(format!("Jade_{version}_amd64.AppImage")))
         .unwrap_or_else(|| std::path::PathBuf::from(format!("Jade_{version}_amd64.AppImage")));
 
-    if !confirm(
-        &format!("Download AppImage to {}?", dest.display()),
-        yes,
-    )? {
+    if !confirm(&format!("Download AppImage to {}?", dest.display()), yes)? {
         bail!("aborted");
     }
 
     eprintln!("Downloading {url} …");
-    let tmp =
-        download_to_temp(url, &format!("Jade_{version}_amd64.AppImage")).map_err(map_err)?;
+    let tmp = download_to_temp(url, &format!("Jade_{version}_amd64.AppImage")).map_err(map_err)?;
     std::fs::copy(&tmp, &dest).with_context(|| format!("copy to {}", dest.display()))?;
     #[cfg(unix)]
     {

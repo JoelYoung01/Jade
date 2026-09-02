@@ -45,6 +45,8 @@ pub fn run(command: SyncCommand, globals: &Globals) -> anyhow::Result<()> {
         SyncCommand::Status => status::run(globals),
         SyncCommand::Pair { url, token } => pair::run(globals, &url, &token),
         SyncCommand::Now => now::run(globals),
-        SyncCommand::Serve { bind, token } => serve::run(globals, bind.as_deref(), token.as_deref()),
+        SyncCommand::Serve { bind, token } => {
+            serve::run(globals, bind.as_deref(), token.as_deref())
+        }
     }
 }

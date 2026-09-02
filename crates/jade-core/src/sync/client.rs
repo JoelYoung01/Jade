@@ -34,18 +34,14 @@ pub fn hello(base_url: &str, token: &str) -> Result<HelloResponse> {
     serde_json::from_str(&body).map_err(|e| Error::Message(format!("hello decode: {e}")))
 }
 
-pub fn pull_events(
-    base_url: &str,
-    token: &str,
-    after_seq: i64,
-) -> Result<Vec<SyncEventEnvelope>> {
+pub fn pull_events(base_url: &str, token: &str, after_seq: i64) -> Result<Vec<SyncEventEnvelope>> {
     let url = format!(
         "{}/v1/tasks/events?after_seq={after_seq}",
         base_url.trim_end_matches('/')
     );
     let body = authorized_get(&url, token)?;
-    let parsed: SyncEventsResponse = serde_json::from_str(&body)
-        .map_err(|e| Error::Message(format!("pull decode: {e}")))?;
+    let parsed: SyncEventsResponse =
+        serde_json::from_str(&body).map_err(|e| Error::Message(format!("pull decode: {e}")))?;
     Ok(parsed.events)
 }
 
@@ -64,7 +60,11 @@ pub fn push_events(
 
 pub fn pull_and_apply_peer(db: &Db, peer: &SyncPeer) -> Result<(u32, u32, i64)> {
     let events = pull_events(&peer.base_url, &peer.token, peer.last_pulled_seq)?;
-    let max_seq = events.iter().map(|e| e.seq).max().unwrap_or(peer.last_pulled_seq);
+    let max_seq = events
+        .iter()
+        .map(|e| e.seq)
+        .max()
+        .unwrap_or(peer.last_pulled_seq);
     let stats = apply_remote_task_events(db, &events)?;
     if max_seq > peer.last_pulled_seq {
         set_peer_cursor(db, peer.peer_device_id, max_seq)?;
@@ -85,7 +85,11 @@ pub fn push_to_peer(db: &Db, peer: &SyncPeer) -> Result<u32> {
         return Ok(0);
     }
     let envelopes: Vec<SyncEventEnvelope> = events.iter().map(task_event_to_envelope).collect();
-    let max_seq = events.iter().map(|e| e.seq).max().unwrap_or(peer.last_push_ack);
+    let max_seq = events
+        .iter()
+        .map(|e| e.seq)
+        .max()
+        .unwrap_or(peer.last_push_ack);
     let resp = push_events(&peer.base_url, &peer.token, &envelopes)?;
     set_peer_push_ack(db, peer.peer_device_id, max_seq)?;
     Ok(resp.accepted)

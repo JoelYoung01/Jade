@@ -46,7 +46,10 @@ struct AppState {
 
 /// Open DB per-request from path (avoids holding rusqlite Connection across await).
 fn open_state_db(state: &AppState) -> Result<Db> {
-    let _guard = state.db.lock().map_err(|_| Error::Message("sync db lock".into()))?;
+    let _guard = state
+        .db
+        .lock()
+        .map_err(|_| Error::Message("sync db lock".into()))?;
     crate::db::open_db(&state.db_path)
 }
 
@@ -103,8 +106,8 @@ async fn post_events_handler(
 ) -> std::result::Result<Json<SyncPushResponse>, StatusCode> {
     check_auth(&headers, &state.token)?;
     let db = open_state_db(&state).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let stats =
-        apply_remote_task_events(&db, &body.events).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let stats = apply_remote_task_events(&db, &body.events)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(SyncPushResponse {
         accepted: stats.accepted,
         skipped: stats.skipped,
@@ -133,7 +136,10 @@ pub async fn serve_sync(
 
     let app = Router::new()
         .route("/v1/hello", get(hello_handler))
-        .route("/v1/tasks/events", get(get_events_handler).post(post_events_handler))
+        .route(
+            "/v1/tasks/events",
+            get(get_events_handler).post(post_events_handler),
+        )
         .with_state(state.clone());
 
     let listener = TcpListener::bind(config.bind)

@@ -24,10 +24,7 @@ impl PeerSyncRuntime {
     }
 
     pub fn is_running(&self) -> bool {
-        self.shutdown
-            .lock()
-            .map(|g| g.is_some())
-            .unwrap_or(false)
+        self.shutdown.lock().map(|g| g.is_some()).unwrap_or(false)
     }
 
     pub fn stop(&self) {

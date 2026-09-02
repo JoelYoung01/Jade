@@ -467,9 +467,7 @@ pub fn open_aur_update_in_konsole() -> Result<(), String> {
 /// Best-effort AppImage asset URL for a release version.
 pub fn appimage_download_url(version: &str) -> String {
     let v = version.trim_start_matches('v');
-    format!(
-        "https://github.com/{GITHUB_REPO}/releases/download/v{v}/Jade_{v}_amd64.AppImage"
-    )
+    format!("https://github.com/{GITHUB_REPO}/releases/download/v{v}/Jade_{v}_amd64.AppImage")
 }
 
 /// Debian package asset URL for a release version.
@@ -547,10 +545,7 @@ mod tests {
 
     #[test]
     fn marker_roundtrip() {
-        let prefix = std::env::temp_dir().join(format!(
-            "jade-marker-test-{}",
-            std::process::id()
-        ));
+        let prefix = std::env::temp_dir().join(format!("jade-marker-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&prefix);
         write_cli_script_marker(&prefix, "0.2.5").unwrap();
         let marker = read_cli_script_marker(&prefix).unwrap();

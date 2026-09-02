@@ -133,11 +133,8 @@ fn is_version_request(args: &[String]) -> bool {
     let has_version = args
         .iter()
         .any(|a| matches!(a.as_str(), "-v" | "-V" | "--version"));
-    let has_command = args.iter().any(|a| {
-        matches!(
-            a.as_str(),
-            "tasks" | "wiki" | "sync" | "update" | "help"
-        )
-    });
+    let has_command = args
+        .iter()
+        .any(|a| matches!(a.as_str(), "tasks" | "wiki" | "sync" | "update" | "help"));
     has_version && !has_command
 }

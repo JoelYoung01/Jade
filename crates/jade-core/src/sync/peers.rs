@@ -126,11 +126,16 @@ pub fn upsert_peer(db: &Db, input: UpsertPeerInput) -> Result<SyncPeer> {
         ],
     )?;
     drop(conn);
-    get_peer(db, input.peer_device_id)?.ok_or_else(|| Error::Message("peer missing after upsert".into()))
+    get_peer(db, input.peer_device_id)?
+        .ok_or_else(|| Error::Message("peer missing after upsert".into()))
 }
 
 pub fn get_peer(db: &Db, peer_device_id: Uuid) -> Result<Option<SyncPeer>> {
-    list_peers(db).map(|peers| peers.into_iter().find(|p| p.peer_device_id == peer_device_id))
+    list_peers(db).map(|peers| {
+        peers
+            .into_iter()
+            .find(|p| p.peer_device_id == peer_device_id)
+    })
 }
 
 pub fn set_peer_cursor(db: &Db, peer_device_id: Uuid, last_pulled_seq: i64) -> Result<()> {
@@ -142,7 +147,11 @@ pub fn set_peer_cursor(db: &Db, peer_device_id: Uuid, last_pulled_seq: i64) -> R
         SET last_pulled_seq = ?1, updated_at = ?2
         WHERE peer_device_id = ?3
         ",
-        params![last_pulled_seq, now.to_rfc3339(), peer_device_id.to_string()],
+        params![
+            last_pulled_seq,
+            now.to_rfc3339(),
+            peer_device_id.to_string()
+        ],
     )?;
     if n == 0 {
         return Err(Error::Message(format!("unknown peer {peer_device_id}")));
@@ -164,11 +173,7 @@ pub fn set_peer_push_ack(db: &Db, peer_device_id: Uuid, last_push_ack: i64) -> R
     Ok(())
 }
 
-pub fn set_peer_sync_result(
-    db: &Db,
-    peer_device_id: Uuid,
-    error: Option<&str>,
-) -> Result<()> {
+pub fn set_peer_sync_result(db: &Db, peer_device_id: Uuid, error: Option<&str>) -> Result<()> {
     let now = Utc::now();
     let conn = db.connection();
     conn.execute(

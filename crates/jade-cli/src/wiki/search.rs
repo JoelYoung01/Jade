@@ -34,11 +34,20 @@ pub fn run(db: &Db, query: &str, format: ListFormat) -> anyhow::Result<()> {
                 return Ok(());
             }
             for hit in &hits {
-                let title = hit.page.title_cache.as_deref().unwrap_or(&hit.page.rel_path);
+                let title = hit
+                    .page
+                    .title_cache
+                    .as_deref()
+                    .unwrap_or(&hit.page.rel_path);
                 println!("{title}");
                 println!("  {}  ·  {}", hit.reason, hit.page.rel_path);
                 if let Some(s) = &hit.snippet {
-                    println!("  …{}[{}]{}…", trim_edges(&s.before), s.matched, trim_edges(&s.after));
+                    println!(
+                        "  …{}[{}]{}…",
+                        trim_edges(&s.before),
+                        s.matched,
+                        trim_edges(&s.after)
+                    );
                 }
                 println!();
             }
