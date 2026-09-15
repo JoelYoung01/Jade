@@ -30,13 +30,15 @@ import {
 import type { RepeatPreset, Tag, Task, TaskFormValues } from "@/lib/types";
 import {
   applyDuePreset,
+  DEFAULT_END_OF_DAY,
+  endOfDayToday,
   formatAbsoluteDateTime,
   formatDue,
   fromDatetimeLocalValue,
   matchesDueQuickPreset,
-  nextHourRounded,
   toDatetimeLocalValue,
   type DueQuickPreset,
+  type EndOfDayTime,
 } from "@/lib/time";
 import { TagLabel } from "@/components/TagLabel";
 import { bestTagAutocomplete, parseTagParts, tagSuggestionPool } from "@/lib/tags";
@@ -69,6 +71,8 @@ type CreateTaskDialogProps = {
   onOpenChange: (open: boolean) => void;
   /** When set, the dialog edits this task instead of creating a new one. */
   task?: Task | null;
+  /** Local end-of-day used for create defaults and non-today quick presets. */
+  endOfDay?: EndOfDayTime;
   existingTags: Tag[];
   recentTagNames: string[];
   onSubmit: (input: TaskFormValues) => Promise<void>;
@@ -78,6 +82,7 @@ type CreateTaskDialogProps = {
 
 type TaskFormProps = {
   task?: Task | null;
+  endOfDay: EndOfDayTime;
   existingTags: Tag[];
   recentTagNames: string[];
   onOpenChange: (open: boolean) => void;
@@ -285,6 +290,7 @@ function DueQuickPresetButtons({
 
 function TaskForm({
   task,
+  endOfDay,
   existingTags,
   recentTagNames,
   onOpenChange,
@@ -300,17 +306,18 @@ function TaskForm({
   const suggestionChipEls = React.useRef(new Map<string, HTMLSpanElement>());
   const selectedChipEls = React.useRef(new Map<string, HTMLSpanElement>());
   const pendingFlipFrom = React.useRef<DOMRect | null>(null);
+  const defaultDue = () => endOfDayToday(new Date(), endOfDay);
   const [title, setTitle] = React.useState(task?.title ?? "");
   const [description, setDescription] = React.useState(task?.description ?? "");
   const [dueLocal, setDueLocal] = React.useState(() =>
-    toDatetimeLocalValue(task ? new Date(task.due_at) : nextHourRounded()),
+    toDatetimeLocalValue(task ? new Date(task.due_at) : defaultDue()),
   );
   const [tagNames, setTagNames] = React.useState<string[]>(() =>
     task ? task.tags.map((tag) => tag.name) : [],
   );
   const [tagDraft, setTagDraft] = React.useState("");
   const [repeatPreset, setRepeatPreset] = React.useState<RepeatPreset>(() =>
-    inferPreset(task?.repeat_cron ?? null, task ? new Date(task.due_at) : nextHourRounded()),
+    inferPreset(task?.repeat_cron ?? null, task ? new Date(task.due_at) : defaultDue()),
   );
   const [repeatCron, setRepeatCron] = React.useState<string>(task?.repeat_cron ?? "");
   const [error, setError] = React.useState<string | null>(null);
@@ -341,11 +348,11 @@ function TaskForm({
     try {
       current = fromDatetimeLocalValue(dueLocal);
     } catch {
-      current = nextHourRounded();
+      current = defaultDue();
     }
     handleDueChange(
       toDatetimeLocalValue(
-        applyDuePreset(current, mode, new Date(), { defaultAfternoonIfNotToday: true }),
+        applyDuePreset(current, mode, new Date(), { endOfDayIfNotToday: endOfDay }),
       ),
     );
   }
@@ -356,7 +363,7 @@ function TaskForm({
       setRepeatCron("");
       return;
     }
-    const due = dueFromLocal() ?? nextHourRounded();
+    const due = dueFromLocal() ?? defaultDue();
     if (preset === "custom") {
       const seed =
         repeatCron.trim().length > 0 ? repeatCron.trim() : cronFromPreset("daily", due);
@@ -754,6 +761,7 @@ export function CreateTaskDialog({
   open,
   onOpenChange,
   task = null,
+  endOfDay = DEFAULT_END_OF_DAY,
   existingTags,
   recentTagNames,
   onSubmit,
@@ -766,6 +774,7 @@ export function CreateTaskDialog({
         <TaskForm
           key={task?.id ?? "create"}
           task={task}
+          endOfDay={endOfDay}
           existingTags={existingTags}
           recentTagNames={recentTagNames}
           onOpenChange={onOpenChange}

@@ -10,6 +10,25 @@ export function nextHourRounded(now = new Date()): Date {
   return result;
 }
 
+/** Local clock time treated as end of day for default due dates. */
+export type EndOfDayTime = {
+  hour: number;
+  minute: number;
+};
+
+/** Default end of day: 4:00 PM local. */
+export const DEFAULT_END_OF_DAY: EndOfDayTime = { hour: 16, minute: 0 };
+
+/** Today (from `now`) at the configured end-of-day local time. */
+export function endOfDayToday(
+  now = new Date(),
+  endOfDay: EndOfDayTime = DEFAULT_END_OF_DAY,
+): Date {
+  const result = new Date(now);
+  result.setHours(endOfDay.hour, endOfDay.minute, 0, 0);
+  return result;
+}
+
 export function toDatetimeLocalValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -232,16 +251,13 @@ export function isSameLocalCalendarDay(a: Date, b: Date): boolean {
   );
 }
 
-/** Local hour used when the create/edit dialog schedules a non-today date. */
-export const DIALOG_NON_TODAY_DUE_HOUR = 17;
-
 export type ApplyDuePresetOptions = {
   /**
-   * When true and the resulting calendar day is not today, set local time to
-   * {@link DIALOG_NON_TODAY_DUE_HOUR}:00. Used by the create/edit dialog only;
-   * context-menu reschedule leaves time-of-day unchanged.
+   * When set and the resulting calendar day is not today, set local time to
+   * this end-of-day. Used by the create/edit dialog only; context-menu
+   * reschedule leaves time-of-day unchanged.
    */
-  defaultAfternoonIfNotToday?: boolean;
+  endOfDayIfNotToday?: EndOfDayTime;
 };
 
 /**
@@ -273,8 +289,9 @@ export function applyDuePreset(
     next.setDate(1 + ((8 - day) % 7));
   }
 
-  if (options.defaultAfternoonIfNotToday && !isSameLocalCalendarDay(next, now)) {
-    next.setHours(DIALOG_NON_TODAY_DUE_HOUR, 0, 0, 0);
+  if (options.endOfDayIfNotToday && !isSameLocalCalendarDay(next, now)) {
+    const { hour, minute } = options.endOfDayIfNotToday;
+    next.setHours(hour, minute, 0, 0);
   }
   return next;
 }

@@ -27,13 +27,14 @@ pub use install::{
     CLI_SCRIPT_MARKER_REL, GITHUB_RELEASES_URL, LATEST_JSON_URL,
 };
 pub use models::{
-    CreateTaskInput, DueUpdate, LaneVisibility, ListTaskEventsInput, ListTaskEventsSinceInput,
-    PeerSyncSettings, RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult,
-    SyncthingSettings, Tag, Task, TaskEvent, TaskEventType, TaskStatus, UpdateTaskInput,
-    UpdateTaskStatusInput, EVENT_ORIGIN_LOCAL,
+    CreateTaskInput, DueUpdate, EndOfDay, LaneVisibility, ListTaskEventsInput,
+    ListTaskEventsSinceInput, PeerSyncSettings, RepeatCronUpdate, RescheduleMode, Settings,
+    StatusUpdateResult, SyncthingSettings, Tag, Task, TaskEvent, TaskEventType, TaskStatus,
+    UpdateTaskInput, UpdateTaskStatusInput, EVENT_ORIGIN_LOCAL,
 };
 pub use settings::{
-    get_settings, set_lane_visibility, set_peer_sync_settings, set_syncthing_settings,
+    get_settings, set_end_of_day, set_lane_visibility, set_peer_sync_settings,
+    set_syncthing_settings,
 };
 pub use sync::{
     apply_remote_task_events, ensure_device, generate_token, list_peers, pair_peer, serve_sync,
@@ -46,7 +47,8 @@ pub use tasks::{
     update_task_status,
 };
 pub use time_helpers::{
-    first_monday_next_month, next_hour_rounded, next_monday, push_to_today, push_to_tomorrow,
+    end_of_day_on, end_of_day_today, first_monday_next_month, next_hour_rounded, next_monday,
+    push_to_today, push_to_tomorrow,
 };
 pub use wiki::{
     add_wiki_root, create_wiki_page, detect_stfolder_marker, get_wiki_page, get_wiki_root,

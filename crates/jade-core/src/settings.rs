@@ -2,11 +2,12 @@ use rusqlite::{params, OptionalExtension};
 
 use crate::db::Db;
 use crate::error::{Error, Result};
-use crate::models::{LaneVisibility, PeerSyncSettings, Settings, SyncthingSettings};
+use crate::models::{EndOfDay, LaneVisibility, PeerSyncSettings, Settings, SyncthingSettings};
 
 const LANE_VISIBILITY_KEY: &str = "lane_visibility";
 const SYNCTHING_KEY: &str = "syncthing";
 const PEER_SYNC_KEY: &str = "peer_sync";
+const END_OF_DAY_KEY: &str = "end_of_day";
 
 pub fn get_settings(db: &Db) -> Result<Settings> {
     let conn = db.connection();
@@ -20,10 +21,12 @@ pub fn get_settings(db: &Db) -> Result<Settings> {
     };
     let syncthing = load_syncthing(&conn)?;
     let peer_sync = load_peer_sync(&conn)?;
+    let end_of_day = load_end_of_day(&conn)?;
     Ok(Settings {
         lane_visibility,
         syncthing,
         peer_sync,
+        end_of_day,
     })
 }
 
@@ -91,6 +94,26 @@ pub fn set_peer_sync_settings(db: &Db, peer_sync: PeerSyncSettings) -> Result<Se
     get_settings(db)
 }
 
+pub fn set_end_of_day(db: &Db, end_of_day: EndOfDay) -> Result<Settings> {
+    if !end_of_day.is_valid() {
+        return Err(Error::Message(format!(
+            "invalid end of day time: {:02}:{:02}",
+            end_of_day.hour, end_of_day.minute
+        )));
+    }
+    let conn = db.connection();
+    let value = serde_json::to_string(&end_of_day)?;
+    conn.execute(
+        "
+        INSERT INTO settings (key, value) VALUES (?1, ?2)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        ",
+        params![END_OF_DAY_KEY, value],
+    )?;
+    drop(conn);
+    get_settings(db)
+}
+
 fn load_syncthing(conn: &rusqlite::Connection) -> Result<SyncthingSettings> {
     let value: Option<String> = conn
         .query_row(
@@ -119,6 +142,27 @@ fn load_peer_sync(conn: &rusqlite::Connection) -> Result<PeerSyncSettings> {
     match value {
         Some(raw) => Ok(serde_json::from_str(&raw)?),
         None => Ok(PeerSyncSettings::with_defaults()),
+    }
+}
+
+fn load_end_of_day(conn: &rusqlite::Connection) -> Result<EndOfDay> {
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![END_OF_DAY_KEY],
+            |row| row.get(0),
+        )
+        .optional()?;
+    match value {
+        Some(raw) => {
+            let parsed: EndOfDay = serde_json::from_str(&raw)?;
+            if parsed.is_valid() {
+                Ok(parsed)
+            } else {
+                Ok(EndOfDay::DEFAULT)
+            }
+        }
+        None => Ok(EndOfDay::DEFAULT),
     }
 }
 
@@ -165,5 +209,43 @@ mod tests {
         .unwrap();
         assert!(updated.syncthing.is_configured());
         assert_eq!(updated.syncthing.api_key, "secret");
+    }
+
+    #[test]
+    fn defaults_and_persist_end_of_day() {
+        let db = open_memory().unwrap();
+        let settings = get_settings(&db).unwrap();
+        assert_eq!(settings.end_of_day, EndOfDay::DEFAULT);
+        assert_eq!(settings.end_of_day.hour, 16);
+        assert_eq!(settings.end_of_day.minute, 0);
+
+        let updated = set_end_of_day(
+            &db,
+            EndOfDay {
+                hour: 17,
+                minute: 30,
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.end_of_day.hour, 17);
+        assert_eq!(updated.end_of_day.minute, 30);
+
+        let reloaded = get_settings(&db).unwrap();
+        assert_eq!(reloaded.end_of_day.hour, 17);
+        assert_eq!(reloaded.end_of_day.minute, 30);
+    }
+
+    #[test]
+    fn rejects_invalid_end_of_day() {
+        let db = open_memory().unwrap();
+        let err = set_end_of_day(
+            &db,
+            EndOfDay {
+                hour: 24,
+                minute: 0,
+            },
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("invalid end of day"));
     }
 }

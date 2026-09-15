@@ -1,6 +1,6 @@
 import * as React from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { BookOpen, CheckSquare, MoreVertical, Plus, RefreshCw, Share2 } from "lucide-react";
+import { BookOpen, CheckSquare, MoreVertical, Plus, RefreshCw, Settings2, Share2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ type AppShellProps = {
   onViewChange: (view: AppView) => void;
   onCreateTask: () => void;
   onCheckForUpdates: () => void;
+  onOpenPreferences: () => void;
   onOpenPeerSync: () => void;
   updateChecking?: boolean;
   children: React.ReactNode;
@@ -32,6 +33,7 @@ export function AppShell({
   onViewChange,
   onCreateTask,
   onCheckForUpdates,
+  onOpenPreferences,
   onOpenPeerSync,
   updateChecking = false,
   children,
@@ -133,6 +135,14 @@ export function AppShell({
             <DropdownMenuContent align="end">
               {version ? <DropdownMenuLabel>Version {version}</DropdownMenuLabel> : null}
               <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  onOpenPreferences();
+                }}
+              >
+                <Settings2 className="mr-2 size-4" />
+                Preferences
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
                   onOpenPeerSync();

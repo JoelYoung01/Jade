@@ -14,6 +14,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { CreateTaskDialog } from "@/components/CreateTaskDialog";
 import { PeerSyncDialog } from "@/components/PeerSyncDialog";
+import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { TaskBoard } from "@/components/TaskBoard";
 import { TaskDragPreview, type ReschedulePreset } from "@/components/TaskCard";
 import { UpdateDialog } from "@/components/UpdateDialog";
@@ -37,6 +38,7 @@ import {
 import { snapCenterToCursor } from "@/lib/dndModifiers";
 import type {
   AppView,
+  EndOfDay,
   LaneVisibility,
   Tag,
   Task,
@@ -44,6 +46,7 @@ import type {
   TaskStatus,
 } from "@/lib/types";
 import { recentTagNames } from "@/lib/tags";
+import { DEFAULT_END_OF_DAY } from "@/lib/time";
 import { useLiveTaskSync } from "@/lib/useLiveTaskSync";
 import { useNow } from "@/lib/useNow";
 
@@ -63,7 +66,9 @@ export default function App(): React.JSX.Element {
     active: true,
     complete: false,
   });
+  const [endOfDay, setEndOfDay] = React.useState<EndOfDay>(DEFAULT_END_OF_DAY);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [preferencesOpen, setPreferencesOpen] = React.useState(false);
   const [peerSyncOpen, setPeerSyncOpen] = React.useState(false);
   const [editingTask, setEditingTask] = React.useState<Task | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -101,6 +106,7 @@ export default function App(): React.JSX.Element {
     setTasks(nextTasks);
     setTags(nextTags);
     setVisibility(settings.lane_visibility);
+    setEndOfDay(settings.end_of_day);
   }, []);
 
   const onSyncError = React.useCallback((message: string) => {
@@ -370,6 +376,7 @@ export default function App(): React.JSX.Element {
         onCheckForUpdates={() => {
           void checkManually();
         }}
+        onOpenPreferences={() => setPreferencesOpen(true)}
         onOpenPeerSync={() => setPeerSyncOpen(true)}
         updateChecking={updateChecking}
       >
@@ -449,6 +456,7 @@ export default function App(): React.JSX.Element {
         open={createOpen}
         onOpenChange={handleDialogOpenChange}
         task={editingTask}
+        endOfDay={endOfDay}
         existingTags={tags}
         recentTagNames={recentTagNames(tasks)}
         onSubmit={editingTask ? handleUpdate : handleCreate}
@@ -466,6 +474,12 @@ export default function App(): React.JSX.Element {
           void runRoute(route);
         }}
         onDismiss={dismissPrompt}
+      />
+
+      <PreferencesDialog
+        open={preferencesOpen}
+        onOpenChange={setPreferencesOpen}
+        onEndOfDayChange={setEndOfDay}
       />
 
       <PeerSyncDialog open={peerSyncOpen} onOpenChange={setPeerSyncOpen} />

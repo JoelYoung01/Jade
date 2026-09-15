@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyDuePreset,
+  DEFAULT_END_OF_DAY,
+  endOfDayToday,
   formatAbsoluteDateTime,
   formatDue,
   isOverdue,
@@ -26,6 +28,26 @@ describe("nextHourRounded", () => {
     const input = new Date(2026, 6, 20, 15, 0, 0);
     const result = nextHourRounded(input);
     expect(result.getHours()).toBe(16);
+  });
+});
+
+describe("endOfDayToday", () => {
+  it("sets today to the default end of day (4pm)", () => {
+    const now = new Date(2026, 6, 20, 10, 15, 30);
+    const result = endOfDayToday(now);
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(6);
+    expect(result.getDate()).toBe(20);
+    expect(result.getHours()).toBe(16);
+    expect(result.getMinutes()).toBe(0);
+    expect(result.getSeconds()).toBe(0);
+  });
+
+  it("honors a custom end of day", () => {
+    const now = new Date(2026, 6, 20, 10, 0, 0);
+    const result = endOfDayToday(now, { hour: 17, minute: 30 });
+    expect(result.getHours()).toBe(17);
+    expect(result.getMinutes()).toBe(30);
   });
 });
 
@@ -205,28 +227,34 @@ describe("applyDuePreset", () => {
     expect(result.getDate()).toBe(3);
   });
 
-  it("with defaultAfternoonIfNotToday, keeps time for today", () => {
-    const result = applyDuePreset(due, "today", now, { defaultAfternoonIfNotToday: true });
+  it("with endOfDayIfNotToday, keeps time for today", () => {
+    const result = applyDuePreset(due, "today", now, {
+      endOfDayIfNotToday: DEFAULT_END_OF_DAY,
+    });
     expect(result.getDate()).toBe(20);
     expect(result.getHours()).toBe(15);
     expect(result.getMinutes()).toBe(30);
   });
 
-  it("with defaultAfternoonIfNotToday, snaps non-today presets to 5pm local", () => {
-    const tomorrow = applyDuePreset(due, "tomorrow", now, { defaultAfternoonIfNotToday: true });
+  it("with endOfDayIfNotToday, snaps non-today presets to end of day local", () => {
+    const tomorrow = applyDuePreset(due, "tomorrow", now, {
+      endOfDayIfNotToday: DEFAULT_END_OF_DAY,
+    });
     expect(tomorrow.getDate()).toBe(21);
-    expect(tomorrow.getHours()).toBe(17);
+    expect(tomorrow.getHours()).toBe(16);
     expect(tomorrow.getMinutes()).toBe(0);
 
-    const monday = applyDuePreset(due, "next_monday", now, { defaultAfternoonIfNotToday: true });
+    const monday = applyDuePreset(due, "next_monday", now, {
+      endOfDayIfNotToday: DEFAULT_END_OF_DAY,
+    });
     expect(monday.getDate()).toBe(27);
-    expect(monday.getHours()).toBe(17);
+    expect(monday.getHours()).toBe(16);
 
     const first = applyDuePreset(due, "first_monday_next_month", now, {
-      defaultAfternoonIfNotToday: true,
+      endOfDayIfNotToday: DEFAULT_END_OF_DAY,
     });
     expect(first.getDate()).toBe(3);
-    expect(first.getHours()).toBe(17);
+    expect(first.getHours()).toBe(16);
   });
 });
 

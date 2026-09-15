@@ -18,14 +18,14 @@ use jade_core::{
     default_db_path, delete_tag, delete_task, ensure_tag, generate_token, get_settings,
     get_wiki_page, latest_event_seq, list_backlinks, list_tags, list_task_events_since, list_tasks,
     list_wiki_pages, list_wiki_roots, open_db, read_wiki_page, reindex_all, reindex_root,
-    remove_wiki_root, repair_wiki_front_matter, reschedule_task, search_wiki_pages,
+    remove_wiki_root, repair_wiki_front_matter, reschedule_task, search_wiki_pages, set_end_of_day,
     set_lane_visibility, set_syncthing_settings, status_for_path, update_task, update_task_status,
     write_wiki_page, AddWikiRootInput, CreateTaskInput, CreateWikiPageInput, Db, DueUpdate,
-    LaneVisibility, ListTaskEventsSinceInput, PeerSyncSettings, ReindexStats, RepeatCronUpdate,
-    RescheduleMode, Settings, StatusUpdateResult, SyncPeer, SyncReport, SyncthingClientConfig,
-    SyncthingSettings, SyncthingStatus, Tag, Task, TaskEvent, TaskStatus, UpdateTaskInput,
-    UpdateTaskStatusInput, WikiBacklink, WikiPage, WikiPageContent, WikiRoot, WikiSearchHit,
-    WriteWikiPageInput,
+    EndOfDay, LaneVisibility, ListTaskEventsSinceInput, PeerSyncSettings, ReindexStats,
+    RepeatCronUpdate, RescheduleMode, Settings, StatusUpdateResult, SyncPeer, SyncReport,
+    SyncthingClientConfig, SyncthingSettings, SyncthingStatus, Tag, Task, TaskEvent, TaskStatus,
+    UpdateTaskInput, UpdateTaskStatusInput, WikiBacklink, WikiPage, WikiPageContent, WikiRoot,
+    WikiSearchHit, WriteWikiPageInput,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -219,6 +219,14 @@ fn set_syncthing_settings_cmd(
     settings: SyncthingSettings,
 ) -> Result<Settings, String> {
     set_syncthing_settings(&state.db, settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_end_of_day_cmd(
+    state: tauri::State<'_, AppState>,
+    end_of_day: EndOfDay,
+) -> Result<Settings, String> {
+    set_end_of_day(&state.db, end_of_day).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -545,6 +553,7 @@ pub fn run() {
             get_settings_cmd,
             set_lane_visibility_cmd,
             set_syncthing_settings_cmd,
+            set_end_of_day_cmd,
             get_peer_sync_status_cmd,
             set_peer_sync_settings_cmd,
             pair_peer_cmd,

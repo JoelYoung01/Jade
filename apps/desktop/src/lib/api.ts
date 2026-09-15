@@ -5,6 +5,7 @@ import { nextOccurrences, validateCron } from "@/lib/repeat";
 import { applyDuePreset, type DueQuickPreset } from "@/lib/time";
 import type {
   CreateTaskInput,
+  EndOfDay,
   LaneVisibility,
   PeerSyncSettings,
   PeerSyncStatus,
@@ -53,6 +54,7 @@ const mockStore: MockStore = {
     lane_visibility: { inactive: true, active: true, complete: false },
     syncthing: { address: "http://127.0.0.1:8384", api_key: "" },
     peer_sync: { enabled: false, bind: "0.0.0.0:7421", token: "" },
+    end_of_day: { hour: 16, minute: 0 },
   },
   wikiRoots: [],
   wikiPages: [],
@@ -290,6 +292,14 @@ export async function apiSetSyncthingSettings(
     return structuredClone(mockStore.settings);
   }
   return invoke<Settings>("set_syncthing_settings_cmd", { settings });
+}
+
+export async function apiSetEndOfDay(endOfDay: EndOfDay): Promise<Settings> {
+  if (!isTauri()) {
+    mockStore.settings.end_of_day = endOfDay;
+    return structuredClone(mockStore.settings);
+  }
+  return invoke<Settings>("set_end_of_day_cmd", { endOfDay });
 }
 
 export async function apiGetPeerSyncStatus(): Promise<PeerSyncStatus> {

@@ -177,6 +177,34 @@ impl PeerSyncSettings {
     }
 }
 
+/// Local clock time treated as "end of day" for default due dates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndOfDay {
+    /// Local hour 0–23.
+    pub hour: u8,
+    /// Local minute 0–59.
+    pub minute: u8,
+}
+
+impl Default for EndOfDay {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl EndOfDay {
+    /// Default end of day: 4:00 PM local.
+    pub const DEFAULT: Self = Self {
+        hour: 16,
+        minute: 0,
+    };
+
+    #[must_use]
+    pub fn is_valid(self) -> bool {
+        self.hour <= 23 && self.minute <= 59
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub lane_visibility: LaneVisibility,
@@ -184,6 +212,8 @@ pub struct Settings {
     pub syncthing: SyncthingSettings,
     #[serde(default)]
     pub peer_sync: PeerSyncSettings,
+    #[serde(default)]
+    pub end_of_day: EndOfDay,
 }
 
 #[derive(Debug, Clone, Deserialize)]

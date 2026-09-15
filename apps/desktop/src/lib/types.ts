@@ -58,10 +58,17 @@ export type PeerSyncSettings = {
   token: string;
 };
 
+/** Local clock time treated as end of day for default due dates. */
+export type EndOfDay = {
+  hour: number;
+  minute: number;
+};
+
 export type Settings = {
   lane_visibility: LaneVisibility;
   syncthing: SyncthingSettings;
   peer_sync: PeerSyncSettings;
+  end_of_day: EndOfDay;
 };
 
 export type SyncDevice = {

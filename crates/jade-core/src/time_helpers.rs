@@ -1,5 +1,7 @@
 use chrono::{DateTime, Datelike, Duration, Local, NaiveTime, TimeZone, Timelike, Utc, Weekday};
 
+use crate::models::EndOfDay;
+
 /// Round "now" up to the next whole hour (local time), returned as UTC.
 /// If already on an exact hour, returns the following hour.
 #[must_use]
@@ -16,6 +18,20 @@ pub fn next_hour_rounded(now: DateTime<Utc>) -> DateTime<Utc> {
         truncated + Duration::hours(1)
     };
     next.with_timezone(&Utc)
+}
+
+/// Today at the configured local end-of-day time, returned as UTC.
+#[must_use]
+pub fn end_of_day_today(end_of_day: EndOfDay) -> DateTime<Utc> {
+    end_of_day_on(Utc::now(), end_of_day)
+}
+
+/// Like [`end_of_day_today`], but with an explicit `now` (for tests).
+#[must_use]
+pub fn end_of_day_on(now: DateTime<Utc>, end_of_day: EndOfDay) -> DateTime<Utc> {
+    let time = NaiveTime::from_hms_opt(u32::from(end_of_day.hour), u32::from(end_of_day.minute), 0)
+        .unwrap_or_else(|| NaiveTime::from_hms_opt(16, 0, 0).expect("default end of day"));
+    on_local_date(now.with_timezone(&Local).date_naive(), time)
 }
 
 /// Keep the local time-of-day from `local`, place it on `date`.
@@ -233,5 +249,22 @@ mod tests {
             result.date_naive(),
             chrono::NaiveDate::from_ymd_opt(2026, 7, 27).unwrap()
         );
+    }
+
+    #[test]
+    fn end_of_day_on_uses_configured_local_time() {
+        let now = Local.with_ymd_and_hms(2026, 7, 20, 10, 15, 0).unwrap();
+        let result = end_of_day_on(
+            now.with_timezone(&Utc),
+            EndOfDay {
+                hour: 16,
+                minute: 0,
+            },
+        )
+        .with_timezone(&Local);
+        assert_eq!(result.date_naive(), now.date_naive());
+        assert_eq!(result.hour(), 16);
+        assert_eq!(result.minute(), 0);
+        assert_eq!(result.second(), 0);
     }
 }
