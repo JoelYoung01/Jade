@@ -55,11 +55,12 @@ export function PreferencesDialog({
   React.useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setMessage(null);
-    setError(null);
     void apiGetSettings()
       .then((settings) => {
-        if (!cancelled) setTimeValue(endOfDayToTimeValue(settings.end_of_day));
+        if (cancelled) return;
+        setTimeValue(endOfDayToTimeValue(settings.end_of_day));
+        setMessage(null);
+        setError(null);
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
