@@ -88,6 +88,52 @@
   }
 }
 
+/* Task columns: thinner scrollbar with the thumb running the full track.
+   scrollbar-width/color must stay auto. Any other value makes WebView2
+   use the Windows scrollbar, which keeps the arrow buttons and ignores
+   the rules below. display:block with a 0 size is required — display:none
+   is treated as unspecified and the native button size comes back. */
+[data-lane-scroll] {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+[data-lane-scroll]::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+[data-lane-scroll]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-lane-scroll]::-webkit-scrollbar-thumb {
+  background-color: oklch(0.38 0.015 150 / 0.4);
+  border: none;
+  border-radius: 999px;
+}
+
+[data-lane-scroll]::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.48 0.02 150 / 0.6);
+}
+
+[data-lane-scroll]::-webkit-scrollbar-button,
+[data-lane-scroll]::-webkit-scrollbar-button:single-button,
+[data-lane-scroll]::-webkit-scrollbar-button:double-button,
+[data-lane-scroll]::-webkit-scrollbar-button:vertical:decrement,
+[data-lane-scroll]::-webkit-scrollbar-button:vertical:increment,
+[data-lane-scroll]::-webkit-scrollbar-button:vertical:start:decrement,
+[data-lane-scroll]::-webkit-scrollbar-button:vertical:start:increment,
+[data-lane-scroll]::-webkit-scrollbar-button:vertical:end:decrement,
+[data-lane-scroll]::-webkit-scrollbar-button:vertical:end:increment {
+  display: block;
+  width: 0;
+  height: 0;
+  background: none;
+  border: none;
+  appearance: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   @keyframes jade-card-enter {
     from {

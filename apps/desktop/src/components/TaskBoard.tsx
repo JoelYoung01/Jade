@@ -85,8 +85,8 @@ function Lane({
         ref={setNodeRef}
         data-lane-scroll
         className={cn(
-          "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg border border-dashed border-border/50 p-2 transition-colors",
-          isOver && "border-primary/50 bg-primary/5",
+          "flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto transition-colors",
+          isOver && "bg-primary/5",
         )}
         onPointerDown={(event) => {
           const target = event.target as HTMLElement | null;
