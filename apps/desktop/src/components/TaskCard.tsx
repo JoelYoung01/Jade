@@ -56,6 +56,12 @@ const RESCHEDULE_PRESETS: { mode: DueQuickPreset; label: string }[] = [
   { mode: "first_monday_next_month", label: "First Monday of Next Month" },
 ];
 
+function taskDescriptionText(description: string | null): string | null {
+  const text = description?.trim() ?? "";
+  if (text.length === 0) return null;
+  return text;
+}
+
 function nextStatus(status: TaskStatus): TaskStatus | null {
   const index = STATUS_ORDER.indexOf(status);
   if (index < 0 || index >= STATUS_ORDER.length - 1) return null;
@@ -116,6 +122,7 @@ export function TaskDragPreview({
       {[...visible].reverse().map((task, reverseIndex) => {
         const index = visible.length - 1 - reverseIndex;
         const overdue = task.status !== "complete" && isOverdue(task.due_at, now);
+        const description = taskDescriptionText(task.description);
         const isFront = index === 0;
         return (
           <div
@@ -144,6 +151,11 @@ export function TaskDragPreview({
                     </span>
                   ) : null}
                 </div>
+                {description ? (
+                  <p className="mt-0.5 text-xs font-normal leading-snug whitespace-pre-wrap break-words text-muted-foreground">
+                    {description}
+                  </p>
+                ) : null}
                 <p
                   className={cn(
                     "mt-1 flex items-center gap-1 text-xs",
@@ -226,6 +238,7 @@ export function TaskCard({
 
   const overdue = task.status !== "complete" && isOverdue(task.due_at, now);
   const repeatLabel = task.repeat_cron ? describeCron(task.repeat_cron) : null;
+  const description = taskDescriptionText(task.description);
 
   return (
     <>
@@ -300,6 +313,11 @@ export function TaskCard({
                   </Tooltip>
                 ) : null}
               </div>
+              {description ? (
+                <p className="mt-0.5 text-xs font-normal leading-snug whitespace-pre-wrap break-words text-muted-foreground">
+                  {description}
+                </p>
+              ) : null}
               <p
                 className={cn(
                   "mt-1 flex items-center gap-1 text-xs",
