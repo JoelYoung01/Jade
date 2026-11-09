@@ -90,7 +90,7 @@ type TaskCardProps = {
   motion?: TaskMotion | undefined;
   selectedTasks: Task[];
   onToggleSelect: (id: string) => void;
-  onClearSelection: () => void;
+  onSelectExclusive: (id: string) => void;
   onPrepareContextSelection: (id: string) => void;
   /** Toggle this tag name in the board text filter (OR terms). */
   onFilterTag?: (tagName: string) => void;
@@ -194,7 +194,7 @@ export function TaskCard({
   motion,
   selectedTasks,
   onToggleSelect,
-  onClearSelection,
+  onSelectExclusive,
   onPrepareContextSelection,
   onFilterTag,
   onEdit,
@@ -277,9 +277,7 @@ export function TaskCard({
                   onToggleSelect(task.id);
                   return;
                 }
-                if (selectedTasks.length > 0) {
-                  onClearSelection();
-                }
+                onSelectExclusive(task.id);
               }}
               onDoubleClick={(event) => {
                 event.stopPropagation();

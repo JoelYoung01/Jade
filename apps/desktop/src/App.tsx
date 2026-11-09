@@ -229,6 +229,14 @@ export default function App(): React.JSX.Element {
     });
   }
 
+  function selectExclusive(id: string): void {
+    setSelectedIds(new Set([id]));
+  }
+
+  function selectIds(ids: string[]): void {
+    setSelectedIds(new Set(ids));
+  }
+
   function clearSelection(): void {
     setSelectedIds(new Set());
   }
@@ -417,6 +425,8 @@ export default function App(): React.JSX.Element {
                     selectedIds={selectedIds}
                     draggingIds={draggingIds}
                     onToggleSelect={toggleSelect}
+                    onSelectExclusive={selectExclusive}
+                    onSelectIds={selectIds}
                     onClearSelection={clearSelection}
                     onPrepareContextSelection={prepareContextSelection}
                     onToggleLane={(status) => void handleToggleLane(status)}

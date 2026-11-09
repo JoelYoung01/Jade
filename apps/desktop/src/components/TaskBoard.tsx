@@ -36,6 +36,7 @@ type LaneProps = {
   selectedTasks: Task[];
   motionById?: ReadonlyMap<string, TaskMotion> | undefined;
   onToggleSelect: (id: string) => void;
+  onSelectExclusive: (id: string) => void;
   onClearSelection: () => void;
   onPrepareContextSelection: (id: string) => void;
   onFilterTag: (tagName: string) => void;
@@ -57,6 +58,7 @@ function Lane({
   selectedTasks,
   motionById,
   onToggleSelect,
+  onSelectExclusive,
   onClearSelection,
   onPrepareContextSelection,
   onFilterTag,
@@ -110,7 +112,7 @@ function Lane({
               motion={motionById?.get(task.id)}
               selectedTasks={selectedTasks}
               onToggleSelect={onToggleSelect}
-              onClearSelection={onClearSelection}
+              onSelectExclusive={onSelectExclusive}
               onPrepareContextSelection={onPrepareContextSelection}
               onFilterTag={onFilterTag}
               onEdit={onEdit}
@@ -136,6 +138,8 @@ type TaskBoardProps = {
   selectedIds: ReadonlySet<string>;
   draggingIds: ReadonlySet<string>;
   onToggleSelect: (id: string) => void;
+  onSelectExclusive: (id: string) => void;
+  onSelectIds: (ids: string[]) => void;
   onClearSelection: () => void;
   onPrepareContextSelection: (id: string) => void;
   onToggleLane: (status: TaskStatus) => void;
@@ -190,6 +194,8 @@ export function TaskBoard({
   selectedIds,
   draggingIds,
   onToggleSelect,
+  onSelectExclusive,
+  onSelectIds,
   onClearSelection,
   onPrepareContextSelection,
   onToggleLane,
@@ -273,6 +279,34 @@ export function TaskBoard({
   );
 
   const visibleLanes = ORDER.filter((s) => visible[s]);
+
+  const visibleFilteredIds = React.useMemo(
+    () => visibleLanes.flatMap((status) => tasksByLane[status].map((task) => task.id)),
+    [visibleLanes, tasksByLane],
+  );
+
+  React.useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "a") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable ||
+          target.tagName === "SELECT");
+      if (inField) return;
+
+      event.preventDefault();
+      onSelectIds(visibleFilteredIds);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onSelectIds, visibleFilteredIds]);
 
   const layoutKey = React.useMemo(() => {
     const lanes = visibleLanes
@@ -402,6 +436,7 @@ export function TaskBoard({
               selectedTasks={selectedTasks}
               motionById={motionById}
               onToggleSelect={onToggleSelect}
+              onSelectExclusive={onSelectExclusive}
               onClearSelection={onClearSelection}
               onPrepareContextSelection={onPrepareContextSelection}
               onFilterTag={handleFilterTag}
