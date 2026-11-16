@@ -3,6 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { Repeat, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -40,6 +41,21 @@ import {
   type DueQuickPreset,
 } from "@/lib/time";
 import { cn } from "@/lib/utils";
+
+/** Keep time-of-day from `current` datetime-local value; set calendar day from `day`. */
+function withLocalDate(current: string, day: Date): string {
+  const existing = new Date(current);
+  const hours = Number.isNaN(existing.getTime()) ? 16 : existing.getHours();
+  const minutes = Number.isNaN(existing.getTime()) ? 0 : existing.getMinutes();
+  const next = new Date(day);
+  next.setHours(hours, minutes, 0, 0);
+  return toDatetimeLocalValue(next);
+}
+
+function parseDatetimeLocal(value: string): Date | undefined {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
 
 const STATUS_ORDER: TaskStatus[] = ["inactive", "active", "complete"];
 
@@ -213,7 +229,11 @@ export function TaskCard({
   const [customDue, setCustomDue] = React.useState(() =>
     toDatetimeLocalValue(new Date(task.due_at)),
   );
+  const [calendarMonth, setCalendarMonth] = React.useState(
+    () => new Date(task.due_at),
+  );
   const confirmDeleteRef = React.useRef<HTMLButtonElement>(null);
+  const selectedCustomDue = parseDatetimeLocal(customDue);
 
   const style: React.CSSProperties = {
     // DragOverlay carries the pointer preview; lane cards stay put as ghosts.
@@ -433,11 +453,9 @@ export function TaskCard({
               })}
               <ContextMenuItem
                 onSelect={() => {
-                  setCustomDue(
-                    toDatetimeLocalValue(
-                      new Date(menuTargets[0]?.due_at ?? task.due_at),
-                    ),
-                  );
+                  const initial = new Date(menuTargets[0]?.due_at ?? task.due_at);
+                  setCustomDue(toDatetimeLocalValue(initial));
+                  setCalendarMonth(initial);
                   setCustomOpen(true);
                 }}
               >
@@ -489,42 +507,65 @@ export function TaskCard({
         </DialogContent>
       </Dialog>
 
-      {customOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div
-            className="w-full max-w-sm rounded-lg border border-border bg-popover p-4 shadow-xl"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                saveCustomReschedule();
-              }
+      <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+        <DialogContent
+          className="w-[min(92vw,22rem)] gap-3"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              saveCustomReschedule();
+            }
+          }}
+        >
+          <DialogHeader className="pr-6">
+            <DialogTitle className="flex min-w-0 items-baseline gap-2 text-sm">
+              <span className="shrink-0">Reschedule</span>
+              <span className="text-muted-foreground" aria-hidden>
+                ·
+              </span>
+              <span className="min-w-0 truncate font-normal text-muted-foreground">
+                {multi ? `${menuTargets.length} selected tasks` : task.title}
+              </span>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Choose a new due date and time
+              {multi ? ` for ${menuTargets.length} selected tasks` : ` for ${task.title}`}.
+            </DialogDescription>
+          </DialogHeader>
+          <Calendar
+            mode="single"
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            selected={selectedCustomDue}
+            onSelect={(day) => {
+              if (!day) return;
+              setCustomDue(withLocalDate(customDue, day));
+              setCalendarMonth(day);
             }}
-          >
-            <h4 className="font-display text-sm font-semibold">Reschedule</h4>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {multi
-                ? `${menuTargets.length} selected tasks`
-                : task.title}
-            </p>
-            <Input
-              className="mt-3"
-              type="datetime-local"
-              value={customDue}
-              onChange={(e) => setCustomDue(e.target.value)}
-              autoFocus
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setCustomOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" className="gap-2" onClick={saveCustomReschedule}>
-                <span>Save</span>
-                <ShortcutKeys keys={["Ctrl", "↵"]} className="text-primary-foreground" />
-              </Button>
-            </div>
+            className="mx-auto rounded-md border border-border bg-transparent p-2"
+          />
+          <Input
+            type="datetime-local"
+            value={customDue}
+            onChange={(e) => {
+              const value = e.target.value;
+              setCustomDue(value);
+              const parsed = parseDatetimeLocal(value);
+              if (parsed) setCalendarMonth(parsed);
+            }}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setCustomOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" className="gap-2" onClick={saveCustomReschedule}>
+              <span>Save</span>
+              <ShortcutKeys keys={["Ctrl", "↵"]} className="text-primary-foreground" />
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
